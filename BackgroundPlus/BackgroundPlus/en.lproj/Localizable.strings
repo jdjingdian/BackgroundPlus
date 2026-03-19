@@ -1,0 +1,40 @@
+"btm.list.title" = "Background Items";
+"btm.list.search_placeholder" = "Search Identifier / Bundle / Path";
+"btm.list.empty" = "No entries found";
+"btm.list.refresh" = "Refresh";
+
+"btm.detail.section.basic" = "Basic Info";
+"btm.detail.field.identifier" = "Identifier";
+"btm.detail.field.bundle_id" = "Bundle ID";
+"btm.detail.field.path" = "Path";
+"btm.detail.field.generation" = "Generation";
+"btm.detail.field.type" = "Type";
+
+"btm.delete.mode" = "Delete Mode";
+"btm.delete.mode.safe" = "Safe";
+"btm.delete.mode.advanced" = "Advanced";
+"btm.delete.required" = "Required";
+
+"btm.confirm.title.low" = "Confirm Deletion";
+"btm.confirm.title.medium" = "Second Confirmation";
+"btm.confirm.title.high" = "High-Risk Confirmation";
+"btm.confirm.dry_run.summary" = "%d entries planned for deletion (%@)";
+"btm.confirm.challenge.placeholder" = "Type identifier suffix to confirm";
+"btm.confirm.button.delete" = "Delete";
+"btm.confirm.button.cancel" = "Cancel";
+
+"btm.result.success.title" = "Deletion Completed";
+"btm.result.fail.title" = "Deletion Failed";
+"btm.result.rollback.title" = "Execution Failed, Rolled Back";
+"btm.result.backup.path" = "Backup Path: %@";
+"btm.result.button.open_backup" = "Open Backup Folder";
+"btm.result.postcheck.pass" = "Target entries are no longer visible; no orphan links detected";
+"btm.result.postcheck.warn" = "Operation completed, but potential orphan links were detected. Review is recommended.";
+"btm.result.postcheck.fail" = "Operation did not reach the expected state; target-related entries remain.";
+"btm.history.title" = "Recent Operations";
+
+"btm.error.backup_failed" = "Backup failed. Write operation was blocked.";
+"btm.error.parse_incomplete" = "Parsing incomplete. Results may be inaccurate.";
+"btm.error.permission_denied" = "Insufficient permission to perform this action.";
+"btm.error.execution_failed" = "Execution failed: %@";
+"btm.error.unknown" = "An unknown error occurred";

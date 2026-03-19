@@ -1,0 +1,40 @@
+"btm.list.title" = "后台项目管理";
+"btm.list.search_placeholder" = "搜索 Identifier / Bundle / 路径";
+"btm.list.empty" = "未找到条目";
+"btm.list.refresh" = "刷新";
+
+"btm.detail.section.basic" = "基本信息";
+"btm.detail.field.identifier" = "标识符";
+"btm.detail.field.bundle_id" = "包名";
+"btm.detail.field.path" = "路径";
+"btm.detail.field.generation" = "代际";
+"btm.detail.field.type" = "类型";
+
+"btm.delete.mode" = "删除模式";
+"btm.delete.mode.safe" = "安全模式";
+"btm.delete.mode.advanced" = "高级模式";
+"btm.delete.required" = "必需";
+
+"btm.confirm.title.low" = "确认删除";
+"btm.confirm.title.medium" = "二次确认";
+"btm.confirm.title.high" = "高风险操作确认";
+"btm.confirm.dry_run.summary" = "计划删除 %d 个条目（%@）";
+"btm.confirm.challenge.placeholder" = "输入标识符末段以确认";
+"btm.confirm.button.delete" = "删除";
+"btm.confirm.button.cancel" = "取消";
+
+"btm.result.success.title" = "删除完成";
+"btm.result.fail.title" = "删除失败";
+"btm.result.rollback.title" = "执行失败，已回滚";
+"btm.result.backup.path" = "备份路径：%@";
+"btm.result.button.open_backup" = "打开备份目录";
+"btm.result.postcheck.pass" = "目标条目已不可见，未发现孤立关联";
+"btm.result.postcheck.warn" = "操作完成，但检测到潜在孤立关联，建议复查";
+"btm.result.postcheck.fail" = "操作未达到预期，仍有目标相关条目残留";
+"btm.history.title" = "最近操作";
+
+"btm.error.backup_failed" = "备份失败，已阻止写入";
+"btm.error.parse_incomplete" = "解析不完整，结果可能不准确";
+"btm.error.permission_denied" = "权限不足，无法执行该操作";
+"btm.error.execution_failed" = "执行失败：%@";
+"btm.error.unknown" = "发生未知错误";
