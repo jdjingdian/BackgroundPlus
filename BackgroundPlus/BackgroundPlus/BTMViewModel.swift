@@ -28,6 +28,10 @@ enum HelperCompatibilityState: Equatable {
     }
 }
 
+enum BTMSidebarItem: Hashable {
+    case backgroundModules
+}
+
 final class BTMViewModel: ObservableObject {
     @Published var entries: [BTMEntry] = []
     @Published var parseIncomplete = false
@@ -42,6 +46,10 @@ final class BTMViewModel: ObservableObject {
     @Published var entryLoadingState: EntryLoadingState = .idle
     @Published var helperCompatibilityState: HelperCompatibilityState = .unknown
     @Published var helperRecovered = false
+    @Published var selectedSidebarItem: BTMSidebarItem? = .backgroundModules
+    @Published var customDetailEntryID: String?
+    @Published var entryEnabledOverrides: [String: Bool] = [:]
+    @Published var customDetailUnavailableMessageKey: String?
 
     private let manager: BTMManager
     private let installManager: HelperInstallManager
@@ -80,6 +88,11 @@ final class BTMViewModel: ObservableObject {
     var selectedEntry: BTMEntry? {
         guard let selectedEntryID else { return nil }
         return entries.first(where: { $0.id == selectedEntryID })
+    }
+
+    var customDetailEntry: BTMEntry? {
+        guard let customDetailEntryID else { return nil }
+        return entries.first(where: { $0.id == customDetailEntryID })
     }
 
     var filteredEntries: [BTMEntry] {
@@ -179,9 +192,15 @@ final class BTMViewModel: ObservableObject {
                 guard let self else { return }
                 self.entries = result.entries
                 self.parseIncomplete = result.parseIncomplete
+                self.applyUITestOverrides()
                 self.errorKey = nil
                 if self.selectedEntryID == nil {
                     self.selectedEntryID = self.entries.first?.id
+                }
+                let validIDs = Set(self.entries.map(\.id))
+                self.entryEnabledOverrides = self.entryEnabledOverrides.filter { validIDs.contains($0.key) }
+                if let customDetailEntryID = self.customDetailEntryID, !validIDs.contains(customDetailEntryID) {
+                    self.customDetailEntryID = nil
                 }
                 self.entryLoadingState = self.entries.isEmpty ? .empty : .loaded
             } catch {
@@ -223,6 +242,38 @@ final class BTMViewModel: ObservableObject {
         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: rawPath)])
     }
 
+    func enabledState(for entry: BTMEntry) -> Bool {
+        if let override = entryEnabledOverrides[entry.id] {
+            return override
+        }
+        return inferredEnabledState(from: entry.disposition)
+    }
+
+    func setEnabledState(_ isEnabled: Bool, for entry: BTMEntry) {
+        entryEnabledOverrides[entry.id] = isEnabled
+        selectedEntryID = entry.id
+    }
+
+    func openCustomDetail(for entry: BTMEntry) {
+        guard canOpenCustomDetail(for: entry) else {
+            customDetailUnavailableMessageKey = "btm.custom_detail.unavailable"
+            return
+        }
+        selectedEntryID = entry.id
+        customDetailEntryID = entry.id
+    }
+
+    func closeCustomDetail() {
+        customDetailEntryID = nil
+    }
+
+    func canOpenCustomDetail(for entry: BTMEntry) -> Bool {
+        let hasIdentifier = !entry.identifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasBundleID = !entry.bundleID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasValidFileURL = URL(string: entry.url)?.isFileURL == true
+        return hasIdentifier || hasBundleID || hasValidFileURL
+    }
+
     private func evaluateCompatibility(forceRefresh: Bool = false) -> Bool {
         let wasIncompatible = helperCompatibilityState.requiresReinstall
         let validation = compatibilityValidator.validate(forceRefresh: forceRefresh)
@@ -254,7 +305,72 @@ final class BTMViewModel: ObservableObject {
     private func moveToRequiresHelperState() {
         entries = []
         selectedEntryID = nil
+        customDetailEntryID = nil
         parseIncomplete = false
         entryLoadingState = .requiresHelper
+    }
+
+    private func inferredEnabledState(from disposition: String) -> Bool {
+        let lowercased = disposition.lowercased()
+        if lowercased.contains("disabled") {
+            return false
+        }
+        if lowercased.contains("enabled") {
+            return true
+        }
+        return true
+    }
+
+    private func applyUITestOverrides() {
+        let args = ProcessInfo.processInfo.arguments
+
+        if args.contains("--ui-test-parse-incomplete-banner") {
+            parseIncomplete = true
+        }
+
+        if args.contains("--ui-test-many-entries") {
+            entries = makeExpandedEntries(from: entries, targetCount: 40)
+        }
+
+        if args.contains("--ui-test-invalid-detail-entry") {
+            let invalid = BTMEntry(
+                uuid: "ui-test-invalid-entry",
+                identifier: "",
+                name: "Invalid Entry For UI Test",
+                type: .unknown,
+                disposition: "[enabled]",
+                url: "not-a-file-url",
+                generation: 0,
+                bundleID: "",
+                parentIdentifier: nil,
+                embeddedItemIdentifiers: []
+            )
+            entries.insert(invalid, at: 0)
+        }
+    }
+
+    private func makeExpandedEntries(from baseEntries: [BTMEntry], targetCount: Int) -> [BTMEntry] {
+        guard !baseEntries.isEmpty else { return baseEntries }
+        var expanded: [BTMEntry] = []
+        expanded.reserveCapacity(targetCount)
+
+        for index in 0..<targetCount {
+            let source = baseEntries[index % baseEntries.count]
+            let entry = BTMEntry(
+                uuid: "\(source.uuid)-ui-\(index)",
+                identifier: "\(source.identifier)-\(index)",
+                name: "\(source.name) Long Long Long Name \(index) For Truncation Boundary Validation",
+                type: source.type,
+                disposition: source.disposition,
+                url: index.isMultiple(of: 3) ? "not-a-file-url" : source.url,
+                generation: source.generation,
+                bundleID: source.bundleID,
+                parentIdentifier: source.parentIdentifier,
+                embeddedItemIdentifiers: source.embeddedItemIdentifiers
+            )
+            expanded.append(entry)
+        }
+
+        return expanded
     }
 }

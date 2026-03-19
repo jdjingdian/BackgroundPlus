@@ -3,6 +3,12 @@
 "btm.list.empty" = "未找到条目";
 "btm.list.refresh" = "刷新";
 "btm.list.state.loading" = "正在加载 BTM 数据...";
+"btm.list.open_custom_detail" = "打开定制功能详情";
+"btm.sidebar.background_modules" = "后台模块";
+"btm.custom_detail.title" = "我的定制功能";
+"btm.custom_detail.back" = "返回";
+"btm.custom_detail.unavailable.title" = "无法打开";
+"btm.custom_detail.unavailable" = "该后台模块缺少有效应用标识，无法进入定制功能页面。";
 
 "btm.detail.section.basic" = "基本信息";
 "btm.detail.field.identifier" = "标识符";

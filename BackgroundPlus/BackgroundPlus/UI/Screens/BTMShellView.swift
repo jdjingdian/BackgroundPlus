@@ -10,18 +10,9 @@ struct BTMShellView: View {
 
     var body: some View {
         NavigationSplitView {
-            BTMEntryListContainerView(viewModel: viewModel)
+            sidebar
         } detail: {
-            BTMEntryDetailContainerView(
-                viewModel: viewModel,
-                requestDelete: { entry in
-                    let planning = viewModel.planning(for: entry)
-                    currentPlan = planning.0
-                    currentRisk = planning.1
-                    currentConfirmation = planning.2
-                    showDeleteSheet = true
-                }
-            )
+            detailContent
         }
         .task {
             viewModel.load()
@@ -43,6 +34,36 @@ struct BTMShellView: View {
                     }
                 )
             }
+        }
+    }
+
+    private var sidebar: some View {
+        List(selection: $viewModel.selectedSidebarItem) {
+            Label("btm.sidebar.background_modules", systemImage: "switch.2")
+                .tag(BTMSidebarItem.backgroundModules)
+        }
+        .navigationTitle(Text("btm.list.title"))
+    }
+
+    @ViewBuilder
+    private var detailContent: some View {
+        if let entry = viewModel.customDetailEntry {
+            BackgroundItemDetailView(
+                viewModel: viewModel,
+                entry: entry,
+                onBack: {
+                    viewModel.closeCustomDetail()
+                },
+                requestDelete: { selectedEntry in
+                    let planning = viewModel.planning(for: selectedEntry)
+                    currentPlan = planning.0
+                    currentRisk = planning.1
+                    currentConfirmation = planning.2
+                    showDeleteSheet = true
+                }
+            )
+        } else {
+            BTMEntryListContainerView(viewModel: viewModel)
         }
     }
 }

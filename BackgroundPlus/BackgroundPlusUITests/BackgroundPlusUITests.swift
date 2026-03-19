@@ -69,4 +69,38 @@ final class BackgroundPlusUITests: XCTestCase {
             XCUIApplication().launch()
         }
     }
+
+    @MainActor
+    func testParseIncompleteBannerStillShowsEntries() throws {
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture", "--ui-test-parse-incomplete-banner", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["Parsing incomplete. Results may be inaccurate."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Static Router"].exists)
+    }
+
+    @MainActor
+    func testLargeListRendersManyRows() throws {
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture", "--ui-test-many-entries", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["Background Items"].waitForExistence(timeout: 5))
+        let toggles = app.descendants(matching: .any).matching(identifier: "btm.row.toggle")
+        XCTAssertGreaterThanOrEqual(toggles.count, 20)
+    }
+
+    @MainActor
+    func testInvalidDetailTargetShowsUnavailableAlert() throws {
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture", "--ui-test-invalid-detail-entry", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+
+        let invalidEntry = app.staticTexts["Invalid Entry For UI Test"]
+        XCTAssertTrue(invalidEntry.waitForExistence(timeout: 5))
+        let firstDetailButton = app.buttons.matching(identifier: "btm.row.custom_detail_button").firstMatch
+        XCTAssertTrue(firstDetailButton.exists)
+        XCTAssertFalse(firstDetailButton.isEnabled)
+    }
 }

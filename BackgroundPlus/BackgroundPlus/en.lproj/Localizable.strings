@@ -3,6 +3,12 @@
 "btm.list.empty" = "No entries found";
 "btm.list.refresh" = "Refresh";
 "btm.list.state.loading" = "Loading BTM data...";
+"btm.list.open_custom_detail" = "Open Custom Detail";
+"btm.sidebar.background_modules" = "Background Modules";
+"btm.custom_detail.title" = "My Custom Feature";
+"btm.custom_detail.back" = "Back";
+"btm.custom_detail.unavailable.title" = "Unavailable";
+"btm.custom_detail.unavailable" = "This background module has no valid app identifier, so custom detail cannot be opened.";
 
 "btm.detail.section.basic" = "Basic Info";
 "btm.detail.field.identifier" = "Identifier";

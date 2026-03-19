@@ -76,6 +76,67 @@ struct BackgroundPlusTests {
         #expect(BTMCoreError.permissionDenied.errorDescription == "btm.error.permission_denied")
     }
 
+    @Test func parserFlagsIncompleteButKeepsEntries() {
+        let parser = BTMDumpParser()
+        let raw = """
+ #1:
+                 UUID: TEST-UUID-1
+                 Name: Demo
+                 Type: mystery (0x999)
+          Disposition: [enabled] (0x1)
+           Identifier: demo.entry
+                  URL: file:///Applications/Demo.app/
+           Generation: 1
+    Bundle Identifier: com.demo.entry
+"""
+
+        let output = parser.parse(raw)
+        #expect(output.parseIncomplete)
+        #expect(output.entries.count == 1)
+    }
+
+    @Test func customDetailAvailabilityRequiresIdentifierBundleOrFileURL() {
+        let viewModel = BTMViewModel(
+            manager: BTMManager(
+                source: FixtureDataSource(),
+                database: InMemoryDatabaseAdapter(seed: []),
+                backupManager: BackupManager(base: URL(fileURLWithPath: NSTemporaryDirectory()))
+            ),
+            helperClient: MockHelperClient(
+                dump: BTMFixture.sampleDump,
+                capabilities: HelperCapabilities(helperVersion: "1.0.0", interfaceVersion: 1)
+            )
+        )
+
+        let invalid = BTMEntry(
+            uuid: "invalid",
+            identifier: "",
+            name: "invalid",
+            type: .unknown,
+            disposition: "",
+            url: "not-a-file-url",
+            generation: 0,
+            bundleID: "",
+            parentIdentifier: nil,
+            embeddedItemIdentifiers: []
+        )
+        let valid = BTMEntry(
+            uuid: "valid",
+            identifier: "id.valid",
+            name: "valid",
+            type: .app,
+            disposition: "",
+            url: "not-a-file-url",
+            generation: 0,
+            bundleID: "",
+            parentIdentifier: nil,
+            embeddedItemIdentifiers: []
+        )
+
+        #expect(!viewModel.canOpenCustomDetail(for: invalid))
+        #expect(viewModel.canOpenCustomDetail(for: valid))
+    }
+
     @Test func helperDataSourcePipelineFeedsParser() throws {
         let source = PrivilegedHelperDataSource(
             helperClient: MockHelperClient(
