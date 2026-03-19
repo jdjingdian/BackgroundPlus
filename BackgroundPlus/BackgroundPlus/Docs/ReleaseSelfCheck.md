@@ -15,6 +15,7 @@
 - Verify backup folder opens from result page.
 - Verify operation history shows backup path.
 - Verify Chinese and English UI labels.
+- Verify toolbar title position stays stable when entering and leaving `BackgroundItemDetailView`.
 
 ## Known limits and mitigation
 

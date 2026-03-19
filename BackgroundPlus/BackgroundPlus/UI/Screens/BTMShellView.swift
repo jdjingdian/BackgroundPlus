@@ -2,6 +2,7 @@ import SwiftUI
 
 struct BTMShellView: View {
     @ObservedObject var viewModel: BTMViewModel
+    private let toolbarBackSlotWidth: CGFloat = 28
 
     @State private var showDeleteSheet = false
     @State private var currentPlan: DeletePlan?
@@ -55,11 +56,6 @@ struct BTMShellView: View {
                 BackgroundItemDetailView(
                     viewModel: viewModel,
                     entry: entry,
-                    onBack: {
-                        withAnimation(.easeOut(duration: 0.25)) {
-                            viewModel.closeCustomDetail()
-                        }
-                    },
                     requestDelete: { selectedEntry in
                         let planning = viewModel.planning(for: selectedEntry)
                         currentPlan = planning.0
@@ -74,5 +70,51 @@ struct BTMShellView: View {
             }
         }
         .animation(.easeOut(duration: 0.25), value: viewModel.customDetailEntryID)
+        .navigationTitle(Text("btm.list.title"))
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                navigationBackSlot
+            }
+
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button {
+                    viewModel.load()
+                } label: {
+                    Label("btm.list.refresh", systemImage: "arrow.clockwise")
+                }
+
+                Button {
+                    viewModel.openBackupFolder()
+                } label: {
+                    Label("btm.result.button.open_backup", systemImage: "folder")
+                }
+
+                SettingsLink {
+                    Label("btm.settings.button", systemImage: "gearshape")
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var navigationBackSlot: some View {
+        if viewModel.customDetailEntry != nil {
+            Button(action: closeCustomDetail) {
+                Label("btm.custom_detail.back", systemImage: "chevron.left")
+            }
+            .accessibilityIdentifier("btm.toolbar.back")
+            .frame(minWidth: toolbarBackSlotWidth, alignment: .leading)
+        } else {
+            Label("btm.custom_detail.back", systemImage: "chevron.left")
+                .hidden()
+                .accessibilityHidden(true)
+                .frame(minWidth: toolbarBackSlotWidth, alignment: .leading)
+        }
+    }
+
+    private func closeCustomDetail() {
+        withAnimation(.easeOut(duration: 0.25)) {
+            viewModel.closeCustomDetail()
+        }
     }
 }

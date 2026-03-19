@@ -103,4 +103,27 @@ final class BackgroundPlusUITests: XCTestCase {
         XCTAssertTrue(firstDetailButton.exists)
         XCTAssertFalse(firstDetailButton.isEnabled)
     }
+
+    @MainActor
+    func testToolbarTitlePositionStaysStableWhenEnteringDetail() throws {
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture", "-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
+        app.launch()
+
+        let title = app.staticTexts["后台项目管理"].firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        let initialTitleX = title.frame.minX
+
+        let detailButtonQuery = app.buttons.matching(identifier: "btm.row.custom_detail_button")
+        guard let detailButton = detailButtonQuery.allElementsBoundByIndex.first(where: { $0.isEnabled }) else {
+            XCTFail("No enabled detail button found in fixture data.")
+            return
+        }
+        detailButton.click()
+
+        XCTAssertTrue(app.descendants(matching: .button).matching(identifier: "btm.toolbar.back").firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["btm.detail.delete_button"].waitForExistence(timeout: 5))
+        let detailTitleX = title.frame.minX
+        XCTAssertEqual(initialTitleX, detailTitleX, accuracy: 1.0)
+    }
 }

@@ -55,27 +55,6 @@ struct BTMEntryListContainerView: View {
             }
         }
         .searchable(text: $viewModel.searchText, prompt: Text("btm.list.search_placeholder"))
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                Button {
-                    viewModel.load()
-                } label: {
-                    Label("btm.list.refresh", systemImage: "arrow.clockwise")
-                }
-
-                Button {
-                    viewModel.openBackupFolder()
-                } label: {
-                    Label("btm.result.button.open_backup", systemImage: "folder")
-                }
-
-                SettingsLink {
-                    Label("btm.settings.button", systemImage: "gearshape")
-                }
-            }
-        }
-        .navigationTitle(Text("btm.list.title"))
-        .accessibilityIdentifier("btm.list.title")
         .alert(
             Text("btm.custom_detail.unavailable.title"),
             isPresented: Binding(

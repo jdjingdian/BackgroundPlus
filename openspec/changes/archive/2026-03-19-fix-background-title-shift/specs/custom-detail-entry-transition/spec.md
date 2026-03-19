@@ -1,4 +1,4 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: 自定义条目详情以滑动方式呈现
 系统 SHALL 将 `BackgroundItemDetailView` 视为“从右侧滑入”的页面，只有选中某条目时 detail 区域才插入该视图，并且动画期间原列表继续存在于 split view 背景以保持上下文。导航栏必须在主列表与详情之间共享一致的布局区域：即便系统返回按钮在详情中出现，标题文本与工具栏控件也不能发生水平偏移，应该在列表与详情之间保持相同的左侧留白与对齐。

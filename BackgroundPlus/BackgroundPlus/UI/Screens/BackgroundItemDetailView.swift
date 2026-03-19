@@ -17,27 +17,24 @@ struct BackgroundItemDetailView: View {
     @ObservedObject var viewModel: BTMViewModel
     private let detailViewModel: BackgroundItemDetailViewModel
 
-    let onBack: () -> Void
     let requestDelete: (BTMEntry) -> Void
 
     init(
         viewModel: BTMViewModel,
         entry: BTMEntry,
-        onBack: @escaping () -> Void,
         requestDelete: @escaping (BTMEntry) -> Void
     ) {
         self.viewModel = viewModel
         self.detailViewModel = BackgroundItemDetailViewModel(entry: entry)
-        self.onBack = onBack
         self.requestDelete = requestDelete
     }
 
-var body: some View {
-    ScrollView {
-        VStack(alignment: .leading, spacing: 12) {
-            if viewModel.parseIncomplete {
-                Text("btm.error.parse_incomplete")
-                    .foregroundStyle(.orange)
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                if viewModel.parseIncomplete {
+                    Text("btm.error.parse_incomplete")
+                        .foregroundStyle(.orange)
                 }
 
                 if let errorKey = viewModel.errorKey {
@@ -63,6 +60,7 @@ var body: some View {
                 } label: {
                     Text("btm.confirm.button.delete")
                 }
+                .accessibilityIdentifier("btm.detail.delete_button")
 
                 if let result = viewModel.result {
                     Divider()
@@ -91,20 +89,12 @@ var body: some View {
                             }
                         }
                     }
-            }
-        }
-        .padding()
-    }
-    .background(Color(nsColor: NSColor.windowBackgroundColor))
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .navigationTitle(Text("btm.custom_detail.title"))
-        .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button(action: onBack) {
-                    Label("btm.custom_detail.back", systemImage: "chevron.left")
                 }
             }
+            .padding()
         }
+        .background(Color(nsColor: NSColor.windowBackgroundColor))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func localizedStatusTitle(_ status: ExecutionStatus) -> String {
