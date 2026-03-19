@@ -2,6 +2,7 @@
 "btm.list.search_placeholder" = "Search Identifier / Bundle / Path";
 "btm.list.empty" = "No entries found";
 "btm.list.refresh" = "Refresh";
+"btm.list.state.loading" = "Loading BTM data...";
 
 "btm.detail.section.basic" = "Basic Info";
 "btm.detail.field.identifier" = "Identifier";
@@ -32,6 +33,28 @@
 "btm.result.postcheck.warn" = "Operation completed, but potential orphan links were detected. Review is recommended.";
 "btm.result.postcheck.fail" = "Operation did not reach the expected state; target-related entries remain.";
 "btm.history.title" = "Recent Operations";
+
+"btm.settings.button" = "Settings";
+"btm.settings.title" = "Helper Setup";
+"btm.settings.helper_status" = "Helper Status";
+"btm.settings.install" = "Install Helper";
+"btm.settings.retry" = "Retry Install";
+"btm.settings.refresh_status" = "Refresh Status";
+"btm.settings.state.not_installed" = "Not Installed";
+"btm.settings.state.installing" = "Installing";
+"btm.settings.state.installed" = "Installed";
+"btm.settings.state.failed" = "Install Failed";
+
+"btm.helper.required.title" = "Helper Required";
+"btm.helper.required.body" = "To read real BTM data, install the privileged helper from Settings first.";
+"btm.helper.required.open_settings" = "Open Settings";
+
+"btm.helper.error.not_installed" = "Privileged helper is not installed.";
+"btm.helper.error.communication" = "Cannot communicate with privileged helper.";
+"btm.helper.error.protocol_mismatch" = "Helper protocol mismatch. Please reinstall helper.";
+"btm.helper.error.install_failed" = "Helper install failed.";
+"btm.helper.error.authorization_denied" = "Authorization denied.";
+"btm.helper.error.signing_mismatch" = "Code signing mismatch. Verify app and helper signing.";
 
 "btm.error.backup_failed" = "Backup failed. Write operation was blocked.";
 "btm.error.parse_incomplete" = "Parsing incomplete. Results may be inaccurate.";

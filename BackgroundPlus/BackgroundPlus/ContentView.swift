@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var viewModel = BTMViewModel()
     @State private var showDeleteSheet = false
+    @State private var showSettingsSheet = false
     @State private var currentPlan: DeletePlan?
     @State private var currentRisk: RiskLevel = .low
     @State private var currentConfirmation: ConfirmationLevel = .single
@@ -35,6 +36,12 @@ struct ContentView: View {
                     } label: {
                         Label("btm.result.button.open_backup", systemImage: "folder")
                     }
+
+                    Button {
+                        showSettingsSheet = true
+                    } label: {
+                        Label("btm.settings.button", systemImage: "gearshape")
+                    }
                 }
             }
             .navigationTitle(Text("btm.list.title"))
@@ -63,16 +70,31 @@ struct ContentView: View {
                 )
             }
         }
+        .sheet(isPresented: $showSettingsSheet) {
+            SettingsView(viewModel: viewModel)
+        }
     }
 
     @ViewBuilder
     private var detailView: some View {
-        if let entry = viewModel.selectedEntry {
+        if viewModel.entryLoadingState == .loading {
+            ProgressView(localized("btm.list.state.loading"))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if viewModel.shouldShowInstallPrompt {
+            MissingHelperView {
+                showSettingsSheet = true
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let entry = viewModel.selectedEntry {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     if viewModel.parseIncomplete {
                         Text("btm.error.parse_incomplete")
                             .foregroundStyle(.orange)
+                    }
+                    if let errorKey = viewModel.errorKey {
+                        Text(localized(errorKey))
+                            .foregroundStyle(.red)
                     }
                     Group {
                         detailRow("btm.detail.field.identifier", value: entry.identifier)
@@ -153,6 +175,90 @@ struct ContentView: View {
         case .rolledBack:
             localized("btm.result.rollback.title")
         }
+    }
+}
+
+private struct SettingsView: View {
+    @ObservedObject var viewModel: BTMViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("btm.settings.title")
+                .font(.title2.bold())
+
+            HStack {
+                Text("btm.settings.helper_status")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(statusText)
+                    .font(.headline)
+            }
+
+            if !viewModel.helperErrorMessage.isEmpty {
+                Text(viewModel.helperErrorMessage)
+                    .foregroundStyle(.red)
+            }
+
+            HStack(spacing: 12) {
+                Button(localized("btm.settings.install")) {
+                    viewModel.installHelper()
+                    viewModel.load()
+                }
+                .disabled(viewModel.helperState == .installing)
+
+                Button(localized("btm.settings.retry")) {
+                    viewModel.installHelper()
+                    viewModel.load()
+                }
+                .disabled(viewModel.helperState == .installing)
+
+                Button(localized("btm.settings.refresh_status")) {
+                    viewModel.refreshHelperState()
+                }
+            }
+
+            Spacer()
+        }
+        .padding(24)
+        .frame(minWidth: 520, minHeight: 280)
+        .onAppear {
+            viewModel.refreshHelperState()
+        }
+    }
+
+    private var statusText: String {
+        switch viewModel.helperState {
+        case .notInstalled:
+            return localized("btm.settings.state.not_installed")
+        case .installing:
+            return localized("btm.settings.state.installing")
+        case .installed:
+            return localized("btm.settings.state.installed")
+        case .failed:
+            return localized("btm.settings.state.failed")
+        }
+    }
+}
+
+private struct MissingHelperView: View {
+    let openSettings: () -> Void
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "shield.lefthalf.filled.badge.checkmark")
+                .font(.system(size: 44))
+                .foregroundStyle(.secondary)
+            Text("btm.helper.required.title")
+                .font(.title3.bold())
+            Text("btm.helper.required.body")
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Button(localized("btm.helper.required.open_settings")) {
+                openSettings()
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .padding(24)
     }
 }
 

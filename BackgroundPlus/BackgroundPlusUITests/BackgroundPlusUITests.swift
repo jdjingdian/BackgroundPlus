@@ -53,6 +53,16 @@ final class BackgroundPlusUITests: XCTestCase {
     }
 
     @MainActor
+    func testShowsHelperPromptWhenNotInstalled() throws {
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-force-no-helper", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["Helper Required"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Open Settings"].exists)
+    }
+
+    @MainActor
     func testLaunchPerformance() throws {
         // This measures how long it takes to launch your application.
         measure(metrics: [XCTApplicationLaunchMetric()]) {

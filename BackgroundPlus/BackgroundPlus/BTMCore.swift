@@ -1,4 +1,7 @@
 import Foundation
+import os
+
+private let btmDataSourceLog = Logger(subsystem: "cn.magicdian.BackgroundPlus", category: "BTMDataSource")
 
 enum BTMEntryType: String, CaseIterable, Codable {
     case app
@@ -141,6 +144,11 @@ enum BTMCoreError: LocalizedError {
     case parseFailed
     case backupFailed
     case deleteFailed
+    case helperNotInstalled
+    case helperCommunicationFailed
+    case helperProtocolMismatch
+    case helperExecutionFailed(String)
+    case permissionDenied
 
     var errorDescription: String? {
         switch self {
@@ -150,6 +158,16 @@ enum BTMCoreError: LocalizedError {
             return "btm.error.backup_failed"
         case .deleteFailed:
             return "btm.error.execution_failed"
+        case .helperNotInstalled:
+            return "btm.helper.error.not_installed"
+        case .helperCommunicationFailed:
+            return "btm.helper.error.communication"
+        case .helperProtocolMismatch:
+            return "btm.helper.error.protocol_mismatch"
+        case let .helperExecutionFailed(message):
+            return message
+        case .permissionDenied:
+            return "btm.error.permission_denied"
         }
     }
 }
@@ -414,6 +432,20 @@ struct SFLToolDataSource: BTMDataSource {
 struct FixtureDataSource: BTMDataSource {
     func fetchDump() throws -> String {
         BTMFixture.sampleDump
+    }
+}
+
+struct PrivilegedHelperDataSource: BTMDataSource {
+    let helperClient: PrivilegedHelperClient
+
+    func fetchDump() throws -> String {
+        do {
+            btmDataSourceLog.info("Fetching dump via helper")
+            return try helperClient.fetchBTMDump()
+        } catch {
+            btmDataSourceLog.error("Helper fetch failed, falling back to sfltool: \(error.localizedDescription, privacy: .public)")
+            return try SFLToolDataSource().fetchDump()
+        }
     }
 }
 

@@ -3,6 +3,15 @@ import Combine
 import Foundation
 import SwiftUI
 
+enum EntryLoadingState: Equatable {
+    case idle
+    case loading
+    case loaded
+    case empty
+    case requiresHelper
+    case error(String)
+}
+
 final class BTMViewModel: ObservableObject {
     @Published var entries: [BTMEntry] = []
     @Published var parseIncomplete = false
@@ -12,16 +21,27 @@ final class BTMViewModel: ObservableObject {
     @Published var history: [OperationRecord] = []
     @Published var errorKey: String?
     @Published var searchText = ""
+    @Published var helperState: HelperInstallState = .notInstalled
+    @Published var helperErrorMessage = ""
+    @Published var entryLoadingState: EntryLoadingState = .idle
 
     private let manager: BTMManager
+    private let installManager: HelperInstallManager
 
-    init(manager: BTMManager? = nil) {
+    init(manager: BTMManager? = nil, installManager: HelperInstallManager = HelperInstallManager()) {
         self.manager = manager ?? BTMViewModel.defaultManager()
+        self.installManager = installManager
+        self.helperState = installManager.persistedState()
     }
 
     static func defaultManager() -> BTMManager {
         let useFixture = ProcessInfo.processInfo.arguments.contains("--ui-test-fixture")
-        let source: BTMDataSource = useFixture ? FixtureDataSource() : SFLToolDataSource()
+        let source: BTMDataSource
+        if useFixture {
+            source = FixtureDataSource()
+        } else {
+            source = PrivilegedHelperDataSource(helperClient: XPCPrivilegedHelperClient())
+        }
         return BTMManager(
             source: source,
             database: InMemoryDatabaseAdapter(seed: [
@@ -46,16 +66,68 @@ final class BTMViewModel: ObservableObject {
         }
     }
 
-    func load() {
+    var shouldShowInstallPrompt: Bool {
+        helperState != .installed
+    }
+
+    func refreshHelperState() {
+        helperState = installManager.refreshState()
+    }
+
+    func installHelper() {
+        helperErrorMessage = ""
+        helperState = .installing
         do {
-            let result = try manager.loadEntries()
-            entries = result.entries
-            parseIncomplete = result.parseIncomplete
-            if selectedEntryID == nil {
-                selectedEntryID = entries.first?.id
-            }
+            helperState = try installManager.install()
+        } catch let error as HelperInstallError {
+            helperState = .failed
+            let key = error.errorDescription ?? "btm.helper.error.install_failed"
+            helperErrorMessage = String(localized: String.LocalizationValue(key))
         } catch {
-            errorKey = "btm.error.parse_incomplete"
+            helperState = .failed
+            helperErrorMessage = error.localizedDescription
+        }
+    }
+
+    func load() {
+        entryLoadingState = .loading
+        refreshHelperState()
+
+        let useFixture = ProcessInfo.processInfo.arguments.contains("--ui-test-fixture")
+        if !useFixture, helperState != .installed {
+            entries = []
+            selectedEntryID = nil
+            errorKey = nil
+            parseIncomplete = false
+            entryLoadingState = .requiresHelper
+            return
+        }
+
+        Task.detached(priority: .userInitiated) { [weak self, manager] in
+            do {
+                let result = try manager.loadEntries()
+                await MainActor.run {
+                    guard let self else { return }
+                    self.entries = result.entries
+                    self.parseIncomplete = result.parseIncomplete
+                    self.errorKey = nil
+                    if self.selectedEntryID == nil {
+                        self.selectedEntryID = self.entries.first?.id
+                    }
+                    self.entryLoadingState = self.entries.isEmpty ? .empty : .loaded
+                }
+            } catch {
+                await MainActor.run {
+                    guard let self else { return }
+                    if let key = (error as? LocalizedError)?.errorDescription {
+                        self.errorKey = key
+                        self.entryLoadingState = .error(key)
+                    } else {
+                        self.errorKey = "btm.error.unknown"
+                        self.entryLoadingState = .error("btm.error.unknown")
+                    }
+                }
+            }
         }
     }
 

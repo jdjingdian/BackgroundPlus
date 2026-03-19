@@ -1,7 +1,7 @@
 # Localization Key Guide
 
 - Prefix: `btm.<module>.<name>`
-- Modules: `list`, `detail`, `delete`, `confirm`, `result`, `error`, `history`
+- Modules: `list`, `detail`, `delete`, `confirm`, `result`, `error`, `history`, `settings`, `helper`
 - Keys must be semantic, stable, and shared by zh-Hans/en files.
 - Business-facing UI strings must use localization keys; avoid hardcoded literals.
 - String formatting placeholders must keep the same order between languages.

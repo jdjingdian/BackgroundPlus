@@ -67,6 +67,29 @@ struct BackgroundPlusTests {
         #expect(enKeys.contains("btm.list.title"))
     }
 
+    @Test func helperErrorMappingsAreStable() {
+        #expect(BTMCoreError.helperNotInstalled.errorDescription == "btm.helper.error.not_installed")
+        #expect(BTMCoreError.helperCommunicationFailed.errorDescription == "btm.helper.error.communication")
+        #expect(BTMCoreError.helperProtocolMismatch.errorDescription == "btm.helper.error.protocol_mismatch")
+        #expect(BTMCoreError.permissionDenied.errorDescription == "btm.error.permission_denied")
+    }
+
+    @Test func helperDataSourcePipelineFeedsParser() throws {
+        let source = PrivilegedHelperDataSource(helperClient: MockHelperClient(dump: BTMFixture.sampleDump))
+        let manager = BTMManager(
+            source: source,
+            database: InMemoryDatabaseAdapter(seed: [
+                "2.cn.magicdian.staticrouter",
+                "16.cn.magicdian.staticrouter.service"
+            ]),
+            backupManager: BackupManager(base: URL(fileURLWithPath: NSTemporaryDirectory()))
+        )
+
+        let loaded = try manager.loadEntries()
+        #expect(loaded.entries.count == 2)
+        #expect(loaded.entries.first?.identifier == "2.cn.magicdian.staticrouter")
+    }
+
     private func parseKeys(from fileURL: URL) throws -> Set<String> {
         let text = try String(contentsOf: fileURL, encoding: .utf8)
         let lines = text.split(whereSeparator: \.isNewline).map(String.init)
@@ -78,6 +101,14 @@ struct BackgroundPlusTests {
         return Set(keys)
     }
 
+}
+
+private struct MockHelperClient: PrivilegedHelperClient {
+    let dump: String
+
+    func fetchBTMDump() throws -> String {
+        dump
+    }
 }
 
 private struct FailingBackupManager: BackupManaging {
