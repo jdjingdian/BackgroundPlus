@@ -4,6 +4,9 @@
 "btm.list.refresh" = "刷新";
 "btm.list.state.loading" = "正在加载 BTM 数据...";
 "btm.list.open_custom_detail" = "打开定制功能详情";
+"btm.list.toggle.accessibility.label" = "切换 %@ 的启用状态";
+"btm.list.toggle.accessibility.value.on" = "已启用";
+"btm.list.toggle.accessibility.value.off" = "已禁用";
 "btm.sidebar.background_modules" = "后台模块";
 "btm.custom_detail.title" = "我的定制功能";
 "btm.custom_detail.back" = "返回";

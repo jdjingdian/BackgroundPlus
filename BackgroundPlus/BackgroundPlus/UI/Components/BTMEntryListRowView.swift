@@ -34,6 +34,9 @@ struct BTMEntryListRowView: View {
             )
             .labelsHidden()
             .accessibilityIdentifier("btm.row.toggle")
+            .accessibilityLabel(Text(toggleAccessibilityLabelText))
+            .accessibilityValue(Text(toggleAccessibilityValueText))
+            .toggleStyle(SwitchToggleStyle())
 
             Button(action: onOpenCustomDetail) {
                 Image(systemName: "chevron.right")
@@ -93,5 +96,17 @@ struct BTMEntryListRowView: View {
             return nil
         }
         return NSWorkspace.shared.icon(forFile: path)
+    }
+
+    private var entryDisplayName: String {
+        entry.name.isEmpty ? entry.identifier : entry.name
+    }
+
+    private var toggleAccessibilityLabelText: String {
+        String(format: localized("btm.list.toggle.accessibility.label"), entryDisplayName)
+    }
+
+    private var toggleAccessibilityValueText: String {
+        localized(isEnabled ? "btm.list.toggle.accessibility.value.on" : "btm.list.toggle.accessibility.value.off")
     }
 }

@@ -47,6 +47,17 @@
 - **WHEN** 用户点击开关或点击 `→` 按钮
 - **THEN** 系统必须仅触发对应操作，且不得误触发另一个控件行为
 
+#### Scenario: 进入详情保持上下文
+
+- **GIVEN** 用户点击某行的 `→` 按钮
+- **WHEN** `BackgroundItemDetailView` 显示
+- **THEN** 系统必须以从右侧滑入的动画呈现详情，并让列表继续维持当前滚动与选中状态
+
+#### Scenario: 开关必须是 switch 样式
+
+- **WHEN** 用户查看任意条目行中的开关控件
+- **THEN** 该控件必须呈现为 macOS switch 风格，且 `accessibilityLabel` 与 `accessibilityValue` 表示当前状态
+
 ### Requirement: 单点删除与 Dry-Run
 
 系统 SHALL 在执行写入前生成 Dry-Run 删除计划，展示目标条目与联动条目，并要求用户确认。
@@ -133,4 +144,3 @@
 - **GIVEN** 条目无法提供有效图标来源
 - **WHEN** 用户打开后台模块列表
 - **THEN** 系统必须显示默认占位图标且不影响开关和跳转操作
-

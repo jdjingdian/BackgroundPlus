@@ -47,23 +47,32 @@ struct BTMShellView: View {
 
     @ViewBuilder
     private var detailContent: some View {
-        if let entry = viewModel.customDetailEntry {
-            BackgroundItemDetailView(
-                viewModel: viewModel,
-                entry: entry,
-                onBack: {
-                    viewModel.closeCustomDetail()
-                },
-                requestDelete: { selectedEntry in
-                    let planning = viewModel.planning(for: selectedEntry)
-                    currentPlan = planning.0
-                    currentRisk = planning.1
-                    currentConfirmation = planning.2
-                    showDeleteSheet = true
-                }
-            )
-        } else {
+        ZStack {
             BTMEntryListContainerView(viewModel: viewModel)
+                .disabled(viewModel.customDetailEntry != nil)
+
+            if let entry = viewModel.customDetailEntry {
+                BackgroundItemDetailView(
+                    viewModel: viewModel,
+                    entry: entry,
+                    onBack: {
+                        withAnimation(.easeOut(duration: 0.25)) {
+                            viewModel.closeCustomDetail()
+                        }
+                    },
+                    requestDelete: { selectedEntry in
+                        let planning = viewModel.planning(for: selectedEntry)
+                        currentPlan = planning.0
+                        currentRisk = planning.1
+                        currentConfirmation = planning.2
+                        showDeleteSheet = true
+                    }
+                )
+                .transition(.move(edge: .trailing))
+                .zIndex(1)
+                .id(entry.id)
+            }
         }
+        .animation(.easeOut(duration: 0.25), value: viewModel.customDetailEntryID)
     }
 }

@@ -33,7 +33,9 @@ struct BTMEntryListContainerView: View {
                                     viewModel.setEnabledState(isOn, for: entry)
                                 },
                                 onOpenCustomDetail: {
-                                    viewModel.openCustomDetail(for: entry)
+                                    withAnimation(.easeOut(duration: 0.25)) {
+                                        viewModel.openCustomDetail(for: entry)
+                                    }
                                 }
                             )
                             .id(entry.id)

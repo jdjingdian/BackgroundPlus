@@ -4,6 +4,9 @@
 "btm.list.refresh" = "Refresh";
 "btm.list.state.loading" = "Loading BTM data...";
 "btm.list.open_custom_detail" = "Open Custom Detail";
+"btm.list.toggle.accessibility.label" = "Toggle enable state for %@";
+"btm.list.toggle.accessibility.value.on" = "Enabled";
+"btm.list.toggle.accessibility.value.off" = "Disabled";
 "btm.sidebar.background_modules" = "Background Modules";
 "btm.custom_detail.title" = "My Custom Feature";
 "btm.custom_detail.back" = "Back";

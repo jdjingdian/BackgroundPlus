@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct BackgroundItemDetailViewModel {
@@ -31,12 +32,12 @@ struct BackgroundItemDetailView: View {
         self.requestDelete = requestDelete
     }
 
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                if viewModel.parseIncomplete {
-                    Text("btm.error.parse_incomplete")
-                        .foregroundStyle(.orange)
+var body: some View {
+    ScrollView {
+        VStack(alignment: .leading, spacing: 12) {
+            if viewModel.parseIncomplete {
+                Text("btm.error.parse_incomplete")
+                    .foregroundStyle(.orange)
                 }
 
                 if let errorKey = viewModel.errorKey {
@@ -90,10 +91,12 @@ struct BackgroundItemDetailView: View {
                             }
                         }
                     }
-                }
             }
-            .padding()
         }
+        .padding()
+    }
+    .background(Color(nsColor: NSColor.windowBackgroundColor))
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle(Text("btm.custom_detail.title"))
         .toolbar {
             ToolbarItem(placement: .navigation) {
