@@ -5,7 +5,9 @@
 ## 需求
 ### Requirement: 设置入口可达
 
-系统 SHALL 提供可达的设置入口，使用户可以进入 helper 安装与状态管理页面。
+系统 SHALL 提供可达的设置入口，使用户可以进入 helper 安装与状态
+管理页面；在 UI 目录重构后，入口路径与可达性必须保持不变，且用户
+无需感知内部模块拆分。
 
 #### Scenario: 用户打开设置页
 
@@ -14,7 +16,10 @@
 
 ### Requirement: BTM 条目可视化
 
-系统 SHALL 提供 BTM 条目列表与详情展示，至少包含 identifier、type、url、generation、parent-child 关系信息；当 helper 已安装时，数据源必须来自真实系统 dump 结果而非固定占位数据。
+系统 SHALL 提供 BTM 条目列表与详情展示，至少包含 identifier、type、
+url、generation、parent-child 关系信息；当 helper 已安装时，数据源
+必须来自真实系统 dump 结果而非固定占位数据；在重构后该能力可由独立
+列表容器模块实现，但展示结果必须保持等价。
 
 #### Scenario: 成功展示条目
 
