@@ -37,13 +37,20 @@
 "btm.settings.button" = "Settings";
 "btm.settings.title" = "Helper Setup";
 "btm.settings.helper_status" = "Helper Status";
+"btm.settings.compatibility_status" = "Compatibility";
 "btm.settings.install" = "Install Helper";
+"btm.settings.reinstall_now" = "Reinstall Helper Now";
 "btm.settings.retry" = "Retry Install";
 "btm.settings.refresh_status" = "Refresh Status";
 "btm.settings.state.not_installed" = "Not Installed";
 "btm.settings.state.installing" = "Installing";
 "btm.settings.state.installed" = "Installed";
 "btm.settings.state.failed" = "Install Failed";
+"btm.settings.compatibility.unknown" = "Unknown";
+"btm.settings.compatibility.ok" = "Compatible";
+"btm.settings.compatibility.recovered" = "Compatible (Recovered)";
+"btm.settings.compatibility.version_mismatch" = "Version Mismatch";
+"btm.settings.compatibility.read_failed" = "Capability Read Failed";
 
 "btm.helper.required.title" = "Helper Required";
 "btm.helper.required.body" = "To read real BTM data, install the privileged helper from Settings first.";
@@ -52,9 +59,15 @@
 "btm.helper.error.not_installed" = "Privileged helper is not installed.";
 "btm.helper.error.communication" = "Cannot communicate with privileged helper.";
 "btm.helper.error.protocol_mismatch" = "Helper protocol mismatch. Please reinstall helper.";
+"btm.helper.error.version_mismatch" = "Helper version mismatch. Please reinstall helper.";
+"btm.helper.error.capabilities_unavailable" = "Cannot read helper capabilities. Please reinstall helper.";
 "btm.helper.error.install_failed" = "Helper install failed.";
 "btm.helper.error.authorization_denied" = "Authorization denied.";
 "btm.helper.error.signing_mismatch" = "Code signing mismatch. Verify app and helper signing.";
+"btm.helper.warning.version_mismatch.title" = "Helper Version Mismatch";
+"btm.helper.warning.version_mismatch.body" = "App version is %@, but helper version is %@. Reinstall helper before continuing.";
+"btm.helper.warning.read_failed.title" = "Helper Validation Failed";
+"btm.helper.warning.read_failed.body" = "The app could not read helper capabilities. Reinstall helper before running privileged operations.";
 
 "btm.error.backup_failed" = "Backup failed. Write operation was blocked.";
 "btm.error.parse_incomplete" = "Parsing incomplete. Results may be inaccurate.";

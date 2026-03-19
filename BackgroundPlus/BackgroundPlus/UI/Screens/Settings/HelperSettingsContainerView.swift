@@ -16,9 +16,37 @@ struct HelperSettingsContainerView: View {
                     .font(.headline)
             }
 
+            HStack {
+                Text("btm.settings.compatibility_status")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(localized(viewModel.compatibilityStatusKey))
+                    .font(.headline)
+                    .foregroundStyle(viewModel.helperCompatibilityState.requiresReinstall ? .red : .primary)
+            }
+
             if !viewModel.helperErrorMessage.isEmpty {
                 Text(viewModel.helperErrorMessage)
                     .foregroundStyle(.red)
+            }
+
+            if viewModel.helperCompatibilityState.requiresReinstall {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label(localized(viewModel.compatibilityWarningTitleKey), systemImage: "exclamationmark.triangle.fill")
+                        .font(.headline)
+                        .foregroundStyle(.red)
+                    Text(viewModel.compatibilityWarningBody)
+                        .foregroundStyle(.primary)
+                    Button(localized("btm.settings.reinstall_now")) {
+                        viewModel.installHelper()
+                        viewModel.load()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                }
+                .padding(12)
+                .background(.red.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
             }
 
             HStack(spacing: 12) {

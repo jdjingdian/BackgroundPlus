@@ -147,6 +147,8 @@ enum BTMCoreError: LocalizedError {
     case helperNotInstalled
     case helperCommunicationFailed
     case helperProtocolMismatch
+    case helperCapabilitiesUnavailable
+    case helperVersionMismatch
     case helperExecutionFailed(String)
     case permissionDenied
 
@@ -164,6 +166,10 @@ enum BTMCoreError: LocalizedError {
             return "btm.helper.error.communication"
         case .helperProtocolMismatch:
             return "btm.helper.error.protocol_mismatch"
+        case .helperCapabilitiesUnavailable:
+            return "btm.helper.error.capabilities_unavailable"
+        case .helperVersionMismatch:
+            return "btm.helper.error.version_mismatch"
         case let .helperExecutionFailed(message):
             return message
         case .permissionDenied:
@@ -439,13 +445,8 @@ struct PrivilegedHelperDataSource: BTMDataSource {
     let helperClient: PrivilegedHelperClient
 
     func fetchDump() throws -> String {
-        do {
-            btmDataSourceLog.info("Fetching dump via helper")
-            return try helperClient.fetchBTMDump()
-        } catch {
-            btmDataSourceLog.error("Helper fetch failed, falling back to sfltool: \(error.localizedDescription, privacy: .public)")
-            return try SFLToolDataSource().fetchDump()
-        }
+        btmDataSourceLog.info("Fetching dump via helper")
+        return try helperClient.fetchBTMDump()
     }
 }
 

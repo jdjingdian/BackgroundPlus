@@ -48,3 +48,45 @@ helper 直接执行 BTM 特权修改。
 
 - **WHEN** 主程序代码路径尝试直接执行特权写操作
 - **THEN** 系统必须拒绝该路径并要求通过 helper 受控接口执行
+
+### Requirement: Helper 版本一致性前置校验
+
+系统 MUST 在执行任何高风险 helper 特权调用前完成 app 与 helper 的版本一致性校验；当版本不匹配时，系统必须阻断后续特权调用。
+
+#### Scenario: 检测到 helper 版本与 app 版本不匹配
+
+- **WHEN** app 完成 helper 握手并发现版本不匹配
+- **THEN** 系统必须拒绝执行后续特权调用，并将状态标记为“需重装 helper”
+
+#### Scenario: 版本一致后允许继续调用
+
+- **WHEN** app 检测到 helper 版本与 app 版本匹配
+- **THEN** 系统必须允许进入正常 helper 调用流程
+
+### Requirement: 稳定的 helper 能力读取接口
+
+helper MUST 提供可读取版本与能力元信息的稳定接口，且该接口在后续版本中禁止移除或破坏兼容。
+
+#### Scenario: app 请求读取 helper 能力信息
+
+- **WHEN** app 发起能力读取请求
+- **THEN** helper 必须返回至少包含 helper 版本与接口版本的结果
+
+#### Scenario: helper 升级后保持能力读取接口可用
+
+- **WHEN** helper 升级到后续版本
+- **THEN** app 仍必须能够通过同一能力读取接口完成兼容性判断
+
+### Requirement: 版本不匹配时强提示并引导重装
+
+当系统检测到 helper 版本不匹配或能力读取失败时，系统 MUST 向用户展示高优先级强提示，并提供明确的重装 helper 操作入口。
+
+#### Scenario: 版本不匹配触发强提示
+
+- **WHEN** app 判断 helper 版本不匹配
+- **THEN** 系统必须展示强提示，说明风险与“重装 helper”操作
+
+#### Scenario: 能力读取失败触发同级处置
+
+- **WHEN** app 无法成功读取 helper 能力信息
+- **THEN** 系统必须按不兼容处理，阻断特权调用并提示用户重装 helper

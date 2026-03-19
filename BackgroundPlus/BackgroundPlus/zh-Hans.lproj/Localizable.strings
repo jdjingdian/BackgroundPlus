@@ -37,13 +37,20 @@
 "btm.settings.button" = "设置";
 "btm.settings.title" = "Helper 安装";
 "btm.settings.helper_status" = "Helper 状态";
+"btm.settings.compatibility_status" = "兼容性";
 "btm.settings.install" = "安装 Helper";
+"btm.settings.reinstall_now" = "立即重装 Helper";
 "btm.settings.retry" = "重试安装";
 "btm.settings.refresh_status" = "刷新状态";
 "btm.settings.state.not_installed" = "未安装";
 "btm.settings.state.installing" = "安装中";
 "btm.settings.state.installed" = "已安装";
 "btm.settings.state.failed" = "安装失败";
+"btm.settings.compatibility.unknown" = "未知";
+"btm.settings.compatibility.ok" = "兼容";
+"btm.settings.compatibility.recovered" = "兼容（已恢复）";
+"btm.settings.compatibility.version_mismatch" = "版本不匹配";
+"btm.settings.compatibility.read_failed" = "能力读取失败";
 
 "btm.helper.required.title" = "需要安装 Helper";
 "btm.helper.required.body" = "要读取真实 BTM 数据，请先在设置中安装特权 Helper。";
@@ -52,9 +59,15 @@
 "btm.helper.error.not_installed" = "特权 Helper 未安装。";
 "btm.helper.error.communication" = "无法与特权 Helper 通信。";
 "btm.helper.error.protocol_mismatch" = "Helper 协议不匹配，请重新安装。";
+"btm.helper.error.version_mismatch" = "Helper 版本不匹配，请重新安装。";
+"btm.helper.error.capabilities_unavailable" = "无法读取 Helper 能力信息，请重新安装。";
 "btm.helper.error.install_failed" = "Helper 安装失败。";
 "btm.helper.error.authorization_denied" = "授权被拒绝。";
 "btm.helper.error.signing_mismatch" = "代码签名不匹配，请检查 App 与 Helper 签名配置。";
+"btm.helper.warning.version_mismatch.title" = "Helper 版本不匹配";
+"btm.helper.warning.version_mismatch.body" = "App 版本为 %@，但 Helper 版本为 %@。请先重装 Helper 再继续。";
+"btm.helper.warning.read_failed.title" = "Helper 校验失败";
+"btm.helper.warning.read_failed.body" = "应用无法读取 Helper 能力信息。请先重装 Helper 再执行特权操作。";
 
 "btm.error.backup_failed" = "备份失败，已阻止写入";
 "btm.error.parse_incomplete" = "解析不完整，结果可能不准确";

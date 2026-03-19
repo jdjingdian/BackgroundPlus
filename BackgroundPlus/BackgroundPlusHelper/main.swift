@@ -4,6 +4,8 @@ import os
 
 private let helperBundleIdentifier = "cn.magicdian.BackgroundPlus.helper"
 private let helperProtocolVersion = 1
+private let helperCapabilitiesRouteVersion = 1
+private let helperInterfaceVersion = 1
 private let helperLog = Logger(subsystem: helperBundleIdentifier, category: "HelperServer")
 
 private struct HelperDumpRequest: Codable {
@@ -17,10 +19,27 @@ private struct HelperDumpResponse: Codable {
     let errorMessage: String?
 }
 
+private struct HelperCapabilitiesRequest: Codable {
+    let version: Int
+}
+
+private struct HelperCapabilitiesResponse: Codable {
+    let version: Int
+    let helperVersion: String
+    let interfaceVersion: Int
+    let errorCode: String?
+    let errorMessage: String?
+}
+
 private let helperDumpRoute = XPCRoute
     .named("btm", "fetchDump", "v1")
     .withMessageType(HelperDumpRequest.self)
     .withReplyType(HelperDumpResponse.self)
+
+private let helperCapabilitiesRoute = XPCRoute
+    .named("helper", "capabilities", "v1")
+    .withMessageType(HelperCapabilitiesRequest.self)
+    .withReplyType(HelperCapabilitiesResponse.self)
 
 private func fetchBTMDump(_ request: HelperDumpRequest) -> HelperDumpResponse {
     helperLog.info("Received dump request, version=\(request.version)")
@@ -42,6 +61,39 @@ private func fetchBTMDump(_ request: HelperDumpRequest) -> HelperDumpResponse {
         helperLog.error("Dump execution failed: \(error.localizedDescription, privacy: .public)")
         return HelperDumpResponse(version: helperProtocolVersion, dump: "", errorCode: "execution_failed", errorMessage: error.localizedDescription)
     }
+}
+
+private func fetchCapabilities(_ request: HelperCapabilitiesRequest) -> HelperCapabilitiesResponse {
+    helperLog.info("Received capabilities request, version=\(request.version)")
+    guard request.version == helperCapabilitiesRouteVersion else {
+        helperLog.error("Capabilities route mismatch: expected=\(helperCapabilitiesRouteVersion) actual=\(request.version)")
+        return HelperCapabilitiesResponse(
+            version: helperCapabilitiesRouteVersion,
+            helperVersion: currentHelperVersion(),
+            interfaceVersion: helperInterfaceVersion,
+            errorCode: "route_version_mismatch",
+            errorMessage: "route_version_mismatch"
+        )
+    }
+
+    return HelperCapabilitiesResponse(
+        version: helperCapabilitiesRouteVersion,
+        helperVersion: currentHelperVersion(),
+        interfaceVersion: helperInterfaceVersion,
+        errorCode: nil,
+        errorMessage: nil
+    )
+}
+
+private func currentHelperVersion() -> String {
+    let info = Bundle.main.infoDictionary
+    if let short = info?["CFBundleShortVersionString"] as? String, !short.isEmpty {
+        return short
+    }
+    if let build = info?["CFBundleVersion"] as? String, !build.isEmpty {
+        return build
+    }
+    return "0"
 }
 
 private func dumpBTMRaw() throws -> String {
@@ -68,6 +120,7 @@ private func dumpBTMRaw() throws -> String {
 do {
     let server = try XPCServer.forMachService()
     server.registerRoute(helperDumpRoute, handler: fetchBTMDump)
+    server.registerRoute(helperCapabilitiesRoute, handler: fetchCapabilities)
     server.setErrorHandler { _ in }
     helperLog.info("Helper server started")
     server.startAndBlock()

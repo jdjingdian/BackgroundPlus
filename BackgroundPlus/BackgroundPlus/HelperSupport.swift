@@ -5,6 +5,7 @@ import os
 
 let helperBundleIdentifier = "cn.magicdian.BackgroundPlus.helper"
 let helperProtocolVersion = 1
+let helperCapabilitiesRouteVersion = 1
 private let helperClientLog = Logger(subsystem: "cn.magicdian.BackgroundPlus", category: "HelperClient")
 
 enum HelperInstallState: String, Codable {
@@ -38,6 +39,10 @@ struct HelperDumpRequest: Codable {
     let version: Int
 }
 
+struct HelperCapabilitiesRequest: Codable {
+    let version: Int
+}
+
 struct HelperDumpResponse: Codable {
     let version: Int
     let dump: String
@@ -45,13 +50,43 @@ struct HelperDumpResponse: Codable {
     let errorMessage: String?
 }
 
+struct HelperCapabilitiesResponse: Codable {
+    let version: Int
+    let helperVersion: String
+    let interfaceVersion: Int
+    let errorCode: String?
+    let errorMessage: String?
+}
+
+struct HelperCapabilities: Equatable {
+    let helperVersion: String
+    let interfaceVersion: Int
+}
+
+enum HelperCompatibilityIssue: Equatable {
+    case versionMismatch(expectedAppVersion: String, actualHelperVersion: String)
+    case interfaceMismatch(expectedInterfaceVersion: Int, actualInterfaceVersion: Int)
+    case capabilityReadFailed
+}
+
+enum HelperValidationResult: Equatable {
+    case compatible(HelperCapabilities)
+    case incompatible(HelperCompatibilityIssue)
+}
+
 let helperDumpRoute = XPCRoute
     .named("btm", "fetchDump", "v1")
     .withMessageType(HelperDumpRequest.self)
     .withReplyType(HelperDumpResponse.self)
 
+let helperCapabilitiesRoute = XPCRoute
+    .named("helper", "capabilities", "v1")
+    .withMessageType(HelperCapabilitiesRequest.self)
+    .withReplyType(HelperCapabilitiesResponse.self)
+
 protocol PrivilegedHelperClient {
     func fetchBTMDump() throws -> String
+    func fetchHelperCapabilities() throws -> HelperCapabilities
 }
 
 struct XPCPrivilegedHelperClient: PrivilegedHelperClient {
@@ -98,6 +133,125 @@ struct XPCPrivilegedHelperClient: PrivilegedHelperClient {
         }
         helperClientLog.info("Helper dump request succeeded, bytes=\(decoded.dump.utf8.count)")
         return decoded.dump
+    }
+
+    func fetchHelperCapabilities() throws -> HelperCapabilities {
+        helperClientLog.info("Starting helper capabilities request")
+        let client = XPCClient.forMachService(named: helperBundleIdentifier)
+        let request = HelperCapabilitiesRequest(version: helperCapabilitiesRouteVersion)
+
+        let semaphore = DispatchSemaphore(value: 0)
+        var reply: Result<HelperCapabilitiesResponse, XPCError>?
+        client.sendMessage(request, to: helperCapabilitiesRoute) { response in
+            reply = response
+            semaphore.signal()
+        }
+
+        if semaphore.wait(timeout: .now() + 20) == .timedOut {
+            helperClientLog.error("Helper capabilities request timed out")
+            throw BTMCoreError.helperCommunicationFailed
+        }
+
+        guard let reply else {
+            throw BTMCoreError.helperCommunicationFailed
+        }
+
+        let decoded: HelperCapabilitiesResponse
+        switch reply {
+        case let .success(value):
+            decoded = value
+        case .failure:
+            helperClientLog.error("Helper capabilities request failed at transport layer")
+            throw BTMCoreError.helperCommunicationFailed
+        }
+
+        guard decoded.version == helperCapabilitiesRouteVersion else {
+            helperClientLog.error("Helper capabilities route mismatch: expected=\(helperCapabilitiesRouteVersion) actual=\(decoded.version)")
+            throw BTMCoreError.helperCapabilitiesUnavailable
+        }
+
+        if let code = decoded.errorCode {
+            helperClientLog.error("Helper capabilities returned error: code=\(code, privacy: .public) message=\(decoded.errorMessage ?? "", privacy: .public)")
+            throw BTMCoreError.helperCapabilitiesUnavailable
+        }
+
+        let capabilities = HelperCapabilities(
+            helperVersion: decoded.helperVersion,
+            interfaceVersion: decoded.interfaceVersion
+        )
+        helperClientLog.info("Helper capabilities request succeeded, helperVersion=\(capabilities.helperVersion, privacy: .public) interfaceVersion=\(capabilities.interfaceVersion)")
+        return capabilities
+    }
+}
+
+final class HelperCompatibilityValidator {
+    private let helperClient: PrivilegedHelperClient
+    private let appVersionProvider: () -> String
+    private let expectedInterfaceVersion: Int
+    private var cachedResult: HelperValidationResult?
+
+    init(
+        helperClient: PrivilegedHelperClient,
+        expectedInterfaceVersion: Int = helperCapabilitiesRouteVersion,
+        appVersionProvider: @escaping () -> String = HelperCompatibilityValidator.defaultAppVersion
+    ) {
+        self.helperClient = helperClient
+        self.expectedInterfaceVersion = expectedInterfaceVersion
+        self.appVersionProvider = appVersionProvider
+    }
+
+    func invalidate() {
+        cachedResult = nil
+    }
+
+    func validate(forceRefresh: Bool = false) -> HelperValidationResult {
+        if !forceRefresh, let cachedResult {
+            return cachedResult
+        }
+
+        let appVersion = appVersionProvider()
+        let result: HelperValidationResult
+
+        do {
+            let capabilities = try helperClient.fetchHelperCapabilities()
+            if capabilities.interfaceVersion != expectedInterfaceVersion {
+                result = .incompatible(
+                    .interfaceMismatch(
+                        expectedInterfaceVersion: expectedInterfaceVersion,
+                        actualInterfaceVersion: capabilities.interfaceVersion
+                    )
+                )
+                helperClientLog.error("Helper interface mismatch: expected=\(self.expectedInterfaceVersion) actual=\(capabilities.interfaceVersion)")
+            } else if capabilities.helperVersion != appVersion {
+                result = .incompatible(
+                    .versionMismatch(
+                        expectedAppVersion: appVersion,
+                        actualHelperVersion: capabilities.helperVersion
+                    )
+                )
+                helperClientLog.error("Helper version mismatch: expectedAppVersion=\(appVersion, privacy: .public) actualHelperVersion=\(capabilities.helperVersion, privacy: .public)")
+            } else {
+                result = .compatible(capabilities)
+                helperClientLog.info("Helper compatibility check passed for appVersion=\(appVersion, privacy: .public)")
+            }
+        } catch {
+            result = .incompatible(.capabilityReadFailed)
+            helperClientLog.error("Helper compatibility check failed: \(error.localizedDescription, privacy: .public)")
+        }
+
+        cachedResult = result
+        return result
+    }
+
+    nonisolated private static func defaultAppVersion() -> String {
+        let info = Bundle.main.infoDictionary
+        if let short = info?["CFBundleShortVersionString"] as? String, !short.isEmpty {
+            return short
+        }
+        if let build = info?["CFBundleVersion"] as? String, !build.isEmpty {
+            return build
+        }
+        return "0"
     }
 }
 

@@ -71,11 +71,18 @@ struct BackgroundPlusTests {
         #expect(BTMCoreError.helperNotInstalled.errorDescription == "btm.helper.error.not_installed")
         #expect(BTMCoreError.helperCommunicationFailed.errorDescription == "btm.helper.error.communication")
         #expect(BTMCoreError.helperProtocolMismatch.errorDescription == "btm.helper.error.protocol_mismatch")
+        #expect(BTMCoreError.helperVersionMismatch.errorDescription == "btm.helper.error.version_mismatch")
+        #expect(BTMCoreError.helperCapabilitiesUnavailable.errorDescription == "btm.helper.error.capabilities_unavailable")
         #expect(BTMCoreError.permissionDenied.errorDescription == "btm.error.permission_denied")
     }
 
     @Test func helperDataSourcePipelineFeedsParser() throws {
-        let source = PrivilegedHelperDataSource(helperClient: MockHelperClient(dump: BTMFixture.sampleDump))
+        let source = PrivilegedHelperDataSource(
+            helperClient: MockHelperClient(
+                dump: BTMFixture.sampleDump,
+                capabilities: HelperCapabilities(helperVersion: "1.0.0", interfaceVersion: 1)
+            )
+        )
         let manager = BTMManager(
             source: source,
             database: InMemoryDatabaseAdapter(seed: [
@@ -88,6 +95,55 @@ struct BackgroundPlusTests {
         let loaded = try manager.loadEntries()
         #expect(loaded.entries.count == 2)
         #expect(loaded.entries.first?.identifier == "2.cn.magicdian.staticrouter")
+    }
+
+    @Test func compatibilityValidatorDetectsOldHelper() {
+        let validator = HelperCompatibilityValidator(
+            helperClient: MockHelperClient(
+                dump: BTMFixture.sampleDump,
+                capabilities: HelperCapabilities(helperVersion: "0.9.0", interfaceVersion: 1)
+            ),
+            appVersionProvider: { "1.0.0" }
+        )
+
+        let result = validator.validate()
+        #expect(
+            result
+                == .incompatible(
+                    .versionMismatch(expectedAppVersion: "1.0.0", actualHelperVersion: "0.9.0")
+                )
+        )
+    }
+
+    @Test func compatibilityValidatorTreatsReadFailureAsIncompatible() {
+        let validator = HelperCompatibilityValidator(
+            helperClient: MockHelperClient(
+                dump: BTMFixture.sampleDump,
+                capabilities: nil,
+                capabilityError: BTMCoreError.helperCommunicationFailed
+            ),
+            appVersionProvider: { "1.0.0" }
+        )
+
+        let result = validator.validate()
+        #expect(result == .incompatible(.capabilityReadFailed))
+    }
+
+    @Test func compatibilityValidatorRecoversAfterForceRefresh() {
+        var state = 0
+        let validator = HelperCompatibilityValidator(
+            helperClient: FlappingHelperClient {
+                defer { state += 1 }
+                if state == 0 {
+                    return .failure(BTMCoreError.helperCommunicationFailed)
+                }
+                return .success(HelperCapabilities(helperVersion: "1.0.0", interfaceVersion: 1))
+            },
+            appVersionProvider: { "1.0.0" }
+        )
+
+        #expect(validator.validate() == .incompatible(.capabilityReadFailed))
+        #expect(validator.validate(forceRefresh: true) == .compatible(HelperCapabilities(helperVersion: "1.0.0", interfaceVersion: 1)))
     }
 
     private func parseKeys(from fileURL: URL) throws -> Set<String> {
@@ -105,9 +161,38 @@ struct BackgroundPlusTests {
 
 private struct MockHelperClient: PrivilegedHelperClient {
     let dump: String
+    let capabilities: HelperCapabilities?
+    var capabilityError: Error?
 
     func fetchBTMDump() throws -> String {
         dump
+    }
+
+    func fetchHelperCapabilities() throws -> HelperCapabilities {
+        if let capabilityError {
+            throw capabilityError
+        }
+        guard let capabilities else {
+            throw BTMCoreError.helperCapabilitiesUnavailable
+        }
+        return capabilities
+    }
+}
+
+private struct FlappingHelperClient: PrivilegedHelperClient {
+    let next: () -> Result<HelperCapabilities, Error>
+
+    func fetchBTMDump() throws -> String {
+        BTMFixture.sampleDump
+    }
+
+    func fetchHelperCapabilities() throws -> HelperCapabilities {
+        switch next() {
+        case let .success(value):
+            return value
+        case let .failure(error):
+            throw error
+        }
     }
 }
 

@@ -12,6 +12,22 @@ enum EntryLoadingState: Equatable {
     case error(String)
 }
 
+enum HelperCompatibilityState: Equatable {
+    case unknown
+    case compatible(helperVersion: String)
+    case versionMismatch(expectedAppVersion: String, actualHelperVersion: String)
+    case capabilityReadFailed
+
+    var requiresReinstall: Bool {
+        switch self {
+        case .versionMismatch, .capabilityReadFailed:
+            return true
+        case .unknown, .compatible:
+            return false
+        }
+    }
+}
+
 final class BTMViewModel: ObservableObject {
     @Published var entries: [BTMEntry] = []
     @Published var parseIncomplete = false
@@ -24,23 +40,32 @@ final class BTMViewModel: ObservableObject {
     @Published var helperState: HelperInstallState = .notInstalled
     @Published var helperErrorMessage = ""
     @Published var entryLoadingState: EntryLoadingState = .idle
+    @Published var helperCompatibilityState: HelperCompatibilityState = .unknown
+    @Published var helperRecovered = false
 
     private let manager: BTMManager
     private let installManager: HelperInstallManager
+    private let compatibilityValidator: HelperCompatibilityValidator
 
-    init(manager: BTMManager? = nil, installManager: HelperInstallManager = HelperInstallManager()) {
-        self.manager = manager ?? BTMViewModel.defaultManager()
+    init(
+        manager: BTMManager? = nil,
+        installManager: HelperInstallManager = HelperInstallManager(),
+        helperClient: PrivilegedHelperClient = XPCPrivilegedHelperClient(),
+        compatibilityValidator: HelperCompatibilityValidator? = nil
+    ) {
+        self.manager = manager ?? BTMViewModel.defaultManager(helperClient: helperClient)
         self.installManager = installManager
+        self.compatibilityValidator = compatibilityValidator ?? HelperCompatibilityValidator(helperClient: helperClient)
         self.helperState = installManager.persistedState()
     }
 
-    static func defaultManager() -> BTMManager {
+    static func defaultManager(helperClient: PrivilegedHelperClient) -> BTMManager {
         let useFixture = ProcessInfo.processInfo.arguments.contains("--ui-test-fixture")
         let source: BTMDataSource
         if useFixture {
             source = FixtureDataSource()
         } else {
-            source = PrivilegedHelperDataSource(helperClient: XPCPrivilegedHelperClient())
+            source = PrivilegedHelperDataSource(helperClient: helperClient)
         }
         return BTMManager(
             source: source,
@@ -67,18 +92,62 @@ final class BTMViewModel: ObservableObject {
     }
 
     var shouldShowInstallPrompt: Bool {
-        helperState != .installed
+        helperState != .installed || helperCompatibilityState.requiresReinstall
+    }
+
+    var compatibilityStatusKey: String {
+        switch helperCompatibilityState {
+        case .unknown:
+            return "btm.settings.compatibility.unknown"
+        case .compatible:
+            return helperRecovered ? "btm.settings.compatibility.recovered" : "btm.settings.compatibility.ok"
+        case .versionMismatch:
+            return "btm.settings.compatibility.version_mismatch"
+        case .capabilityReadFailed:
+            return "btm.settings.compatibility.read_failed"
+        }
+    }
+
+    var compatibilityWarningTitleKey: String {
+        switch helperCompatibilityState {
+        case .versionMismatch:
+            return "btm.helper.warning.version_mismatch.title"
+        case .capabilityReadFailed:
+            return "btm.helper.warning.read_failed.title"
+        case .unknown, .compatible:
+            return ""
+        }
+    }
+
+    var compatibilityWarningBody: String {
+        switch helperCompatibilityState {
+        case let .versionMismatch(expected, actual):
+            return String(format: localized("btm.helper.warning.version_mismatch.body"), expected, actual)
+        case .capabilityReadFailed:
+            return localized("btm.helper.warning.read_failed.body")
+        case .unknown, .compatible:
+            return ""
+        }
     }
 
     func refreshHelperState() {
         helperState = installManager.refreshState()
+        if helperState != .installed {
+            compatibilityValidator.invalidate()
+            helperCompatibilityState = .unknown
+            helperRecovered = false
+        }
     }
 
     func installHelper() {
         helperErrorMessage = ""
+        compatibilityValidator.invalidate()
         helperState = .installing
         do {
             helperState = try installManager.install()
+            if helperState == .installed {
+                _ = evaluateCompatibility(forceRefresh: true)
+            }
         } catch let error as HelperInstallError {
             helperState = .failed
             let key = error.errorDescription ?? "btm.helper.error.install_failed"
@@ -95,37 +164,34 @@ final class BTMViewModel: ObservableObject {
 
         let useFixture = ProcessInfo.processInfo.arguments.contains("--ui-test-fixture")
         if !useFixture, helperState != .installed {
-            entries = []
-            selectedEntryID = nil
-            errorKey = nil
-            parseIncomplete = false
-            entryLoadingState = .requiresHelper
+            moveToRequiresHelperState()
             return
         }
 
-        Task.detached(priority: .userInitiated) { [weak self, manager] in
+        if !useFixture, !evaluateCompatibility() {
+            moveToRequiresHelperState()
+            return
+        }
+
+        Task(priority: .userInitiated) { [weak self, manager] in
             do {
                 let result = try manager.loadEntries()
-                await MainActor.run {
-                    guard let self else { return }
-                    self.entries = result.entries
-                    self.parseIncomplete = result.parseIncomplete
-                    self.errorKey = nil
-                    if self.selectedEntryID == nil {
-                        self.selectedEntryID = self.entries.first?.id
-                    }
-                    self.entryLoadingState = self.entries.isEmpty ? .empty : .loaded
+                guard let self else { return }
+                self.entries = result.entries
+                self.parseIncomplete = result.parseIncomplete
+                self.errorKey = nil
+                if self.selectedEntryID == nil {
+                    self.selectedEntryID = self.entries.first?.id
                 }
+                self.entryLoadingState = self.entries.isEmpty ? .empty : .loaded
             } catch {
-                await MainActor.run {
-                    guard let self else { return }
-                    if let key = (error as? LocalizedError)?.errorDescription {
-                        self.errorKey = key
-                        self.entryLoadingState = .error(key)
-                    } else {
-                        self.errorKey = "btm.error.unknown"
-                        self.entryLoadingState = .error("btm.error.unknown")
-                    }
+                guard let self else { return }
+                if let key = (error as? LocalizedError)?.errorDescription {
+                    self.errorKey = key
+                    self.entryLoadingState = .error(key)
+                } else {
+                    self.errorKey = "btm.error.unknown"
+                    self.entryLoadingState = .error("btm.error.unknown")
                 }
             }
         }
@@ -136,6 +202,11 @@ final class BTMViewModel: ObservableObject {
     }
 
     func executeDelete(entry: BTMEntry) {
+        if !evaluateCompatibility() {
+            moveToRequiresHelperState()
+            errorKey = BTMCoreError.helperVersionMismatch.errorDescription
+            return
+        }
         let (plan, risk, confirmation) = planning(for: entry)
         let dbFiles: [URL] = []
         result = manager.execute(plan: plan, target: entry, risk: risk, confirmation: confirmation, sourceFilesForBackup: dbFiles)
@@ -150,5 +221,40 @@ final class BTMViewModel: ObservableObject {
             return
         }
         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: rawPath)])
+    }
+
+    private func evaluateCompatibility(forceRefresh: Bool = false) -> Bool {
+        let wasIncompatible = helperCompatibilityState.requiresReinstall
+        let validation = compatibilityValidator.validate(forceRefresh: forceRefresh)
+        switch validation {
+        case let .compatible(capabilities):
+            helperCompatibilityState = .compatible(helperVersion: capabilities.helperVersion)
+            helperRecovered = wasIncompatible
+            return true
+        case let .incompatible(issue):
+            helperRecovered = false
+            switch issue {
+            case let .versionMismatch(expectedAppVersion, actualHelperVersion):
+                helperCompatibilityState = .versionMismatch(
+                    expectedAppVersion: expectedAppVersion,
+                    actualHelperVersion: actualHelperVersion
+                )
+                errorKey = BTMCoreError.helperVersionMismatch.errorDescription
+            case .interfaceMismatch:
+                helperCompatibilityState = .capabilityReadFailed
+                errorKey = BTMCoreError.helperCapabilitiesUnavailable.errorDescription
+            case .capabilityReadFailed:
+                helperCompatibilityState = .capabilityReadFailed
+                errorKey = BTMCoreError.helperCapabilitiesUnavailable.errorDescription
+            }
+            return false
+        }
+    }
+
+    private func moveToRequiresHelperState() {
+        entries = []
+        selectedEntryID = nil
+        parseIncomplete = false
+        entryLoadingState = .requiresHelper
     }
 }
