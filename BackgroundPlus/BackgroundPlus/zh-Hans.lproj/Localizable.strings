@@ -36,21 +36,36 @@
 
 "btm.settings.button" = "设置";
 "btm.settings.title" = "Helper 安装";
+"btm.settings.nav.general" = "通用";
+"btm.settings.nav.about" = "关于";
 "btm.settings.helper_status" = "Helper 状态";
+"btm.settings.managed_by" = "由 %@ 管理";
 "btm.settings.compatibility_status" = "兼容性";
 "btm.settings.install" = "安装 Helper";
 "btm.settings.reinstall_now" = "立即重装 Helper";
 "btm.settings.retry" = "重试安装";
 "btm.settings.refresh_status" = "刷新状态";
+"btm.settings.uninstall" = "卸载 Helper";
+"btm.settings.close" = "关闭";
+"btm.settings.uninstall.manual.title" = "手动卸载 Helper";
+"btm.settings.uninstall.manual.copy" = "复制命令";
+"btm.settings.uninstall.manual.cancel" = "取消";
+"btm.settings.uninstall.manual.message" = "请在终端中执行以下命令进行卸载：\n%@";
 "btm.settings.state.not_installed" = "未安装";
 "btm.settings.state.installing" = "安装中";
 "btm.settings.state.installed" = "已安装";
 "btm.settings.state.failed" = "安装失败";
+"btm.settings.state.method.smjobbless" = "当前安装方式：SMJobBless";
 "btm.settings.compatibility.unknown" = "未知";
 "btm.settings.compatibility.ok" = "兼容";
 "btm.settings.compatibility.recovered" = "兼容（已恢复）";
 "btm.settings.compatibility.version_mismatch" = "版本不匹配";
 "btm.settings.compatibility.read_failed" = "能力读取失败";
+"btm.settings.about.subtitle" = "帮助你管理 macOS 网络路由。";
+"btm.settings.about.version" = "版本：%@";
+"btm.settings.about.license" = "BackgroundPlus 基于 Apache 2.0 协议开源。";
+"btm.settings.about.copyright" = "版权所有 © %d，Derek Jing";
+"btm.settings.about.homepage" = "项目主页";
 
 "btm.helper.required.title" = "需要安装 Helper";
 "btm.helper.required.body" = "要读取真实 BTM 数据，请先在设置中安装特权 Helper。";

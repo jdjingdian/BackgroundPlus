@@ -2,7 +2,6 @@ import SwiftUI
 
 struct BTMEntryListContainerView: View {
     @ObservedObject var viewModel: BTMViewModel
-    let openSettings: () -> Void
 
     var body: some View {
         List(selection: $viewModel.selectedEntryID) {
@@ -26,9 +25,7 @@ struct BTMEntryListContainerView: View {
                     Label("btm.result.button.open_backup", systemImage: "folder")
                 }
 
-                Button {
-                    openSettings()
-                } label: {
+                SettingsLink {
                     Label("btm.settings.button", systemImage: "gearshape")
                 }
             }

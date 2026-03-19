@@ -36,21 +36,36 @@
 
 "btm.settings.button" = "Settings";
 "btm.settings.title" = "Helper Setup";
+"btm.settings.nav.general" = "General";
+"btm.settings.nav.about" = "About";
 "btm.settings.helper_status" = "Helper Status";
+"btm.settings.managed_by" = "Managed by %@";
 "btm.settings.compatibility_status" = "Compatibility";
 "btm.settings.install" = "Install Helper";
 "btm.settings.reinstall_now" = "Reinstall Helper Now";
 "btm.settings.retry" = "Retry Install";
 "btm.settings.refresh_status" = "Refresh Status";
+"btm.settings.uninstall" = "Uninstall Helper";
+"btm.settings.close" = "Close";
+"btm.settings.uninstall.manual.title" = "Manual Helper Removal";
+"btm.settings.uninstall.manual.copy" = "Copy Command";
+"btm.settings.uninstall.manual.cancel" = "Cancel";
+"btm.settings.uninstall.manual.message" = "Run the following command in Terminal to remove helper:\n%@";
 "btm.settings.state.not_installed" = "Not Installed";
 "btm.settings.state.installing" = "Installing";
 "btm.settings.state.installed" = "Installed";
 "btm.settings.state.failed" = "Install Failed";
+"btm.settings.state.method.smjobbless" = "Active install method: SMJobBless";
 "btm.settings.compatibility.unknown" = "Unknown";
 "btm.settings.compatibility.ok" = "Compatible";
 "btm.settings.compatibility.recovered" = "Compatible (Recovered)";
 "btm.settings.compatibility.version_mismatch" = "Version Mismatch";
 "btm.settings.compatibility.read_failed" = "Capability Read Failed";
+"btm.settings.about.subtitle" = "Manage macOS network routes with a cleaner workflow.";
+"btm.settings.about.version" = "Version: %@";
+"btm.settings.about.license" = "BackgroundPlus is open source under the Apache 2.0 license.";
+"btm.settings.about.copyright" = "Copyright © %d, Derek Jing";
+"btm.settings.about.homepage" = "Project Homepage";
 
 "btm.helper.required.title" = "Helper Required";
 "btm.helper.required.body" = "To read real BTM data, install the privileged helper from Settings first.";

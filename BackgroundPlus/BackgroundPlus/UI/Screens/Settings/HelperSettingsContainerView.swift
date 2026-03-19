@@ -1,33 +1,58 @@
 import SwiftUI
+import AppKit
 
 struct HelperSettingsContainerView: View {
     @ObservedObject var viewModel: BTMViewModel
+    @State private var showManualUninstallAlert = false
+    private let settingsWidth: CGFloat = 560
+    private let iconLength: CGFloat = 128
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("btm.settings.title")
-                .font(.title2.bold())
+        TabView {
+            generalTabContent
+                .tabItem {
+                    Label(localized("btm.settings.nav.general"), systemImage: "gear")
+                }
 
+            aboutTabContent
+                .tabItem {
+                    Label(localized("btm.settings.nav.about"), systemImage: "questionmark.circle")
+                }
+        }
+        .frame(width: settingsWidth)
+        .padding(.top, 4)
+        .alert(localized("btm.settings.uninstall.manual.title"), isPresented: $showManualUninstallAlert) {
+            Button(localized("btm.settings.uninstall.manual.copy")) {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(manualUninstallCommand, forType: .string)
+            }
+            Button(localized("btm.settings.uninstall.manual.cancel"), role: .cancel) {}
+        } message: {
+            Text(String(format: localized("btm.settings.uninstall.manual.message"), manualUninstallCommand))
+        }
+        .onAppear {
+            viewModel.refreshHelperState()
+        }
+    }
+
+    private var generalTabContent: some View {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("btm.settings.helper_status")
-                    .foregroundStyle(.secondary)
+                Text(localized("btm.settings.helper_status"))
+                    .font(.title3.bold())
+                statusBadge
                 Spacer()
-                Text(statusText)
-                    .font(.headline)
+                primaryActionButton
             }
 
-            HStack {
-                Text("btm.settings.compatibility_status")
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text(localized(viewModel.compatibilityStatusKey))
-                    .font(.headline)
-                    .foregroundStyle(viewModel.helperCompatibilityState.requiresReinstall ? .red : .primary)
-            }
+            Text(generalStateFooter)
+                .font(.footnote.italic())
+                .foregroundStyle(.secondary)
 
-            if !viewModel.helperErrorMessage.isEmpty {
-                Text(viewModel.helperErrorMessage)
-                    .foregroundStyle(.red)
+            if viewModel.helperState == .installed {
+                Text(localized("btm.settings.state.method.smjobbless"))
+                    .font(.footnote.italic())
+                    .foregroundStyle(.secondary)
             }
 
             if viewModel.helperCompatibilityState.requiresReinstall {
@@ -44,48 +69,191 @@ struct HelperSettingsContainerView: View {
                     .buttonStyle(.borderedProminent)
                     .tint(.red)
                 }
-                .padding(12)
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(.red.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
 
-            HStack(spacing: 12) {
-                Button(localized("btm.settings.install")) {
-                    viewModel.installHelper()
-                    viewModel.load()
-                }
-                .disabled(viewModel.helperState == .installing)
+            if !viewModel.helperErrorMessage.isEmpty {
+                Text(viewModel.helperErrorMessage)
+                    .foregroundStyle(.red)
+                    .padding(.horizontal, 2)
+            }
 
-                Button(localized("btm.settings.retry")) {
-                    viewModel.installHelper()
-                    viewModel.load()
-                }
-                .disabled(viewModel.helperState == .installing)
+            Divider()
 
+            HStack(spacing: 10) {
                 Button(localized("btm.settings.refresh_status")) {
                     viewModel.refreshHelperState()
                 }
+                .buttonStyle(.bordered)
+
+                Spacer()
+
+                if viewModel.helperState == .installed {
+                    Button(localized("btm.settings.uninstall"), role: .destructive) {
+                        showManualUninstallAlert = true
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+        }
+        .padding()
+    }
+
+    private var aboutTabContent: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 16) {
+                appIconView
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(appName)
+                        .font(.largeTitle.bold())
+                    Text(localized("btm.settings.about.subtitle"))
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+
+                    Divider()
+                        .padding(.vertical, 2)
+
+                    Text(String(format: localized("btm.settings.about.version"), appVersion))
+                        .font(.caption.italic())
+                }
             }
 
-            Spacer()
+            Divider()
+
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(String(format: localized("btm.settings.managed_by"), "SMJobBless"))
+                        .font(.footnote)
+                Text(localized("btm.settings.about.license"))
+                        .font(.footnote)
+                    Text(copyrightText)
+                        .font(.footnote)
+                }
+                Spacer()
+                Button {
+                    openProjectHomepage()
+                } label: {
+                    Label(localized("btm.settings.about.homepage"), systemImage: "house")
+                        .font(.footnote)
+                }
+                .buttonStyle(.bordered)
+            }
         }
-        .padding(24)
-        .frame(minWidth: 520, minHeight: 280)
-        .onAppear {
-            viewModel.refreshHelperState()
+        .padding()
+    }
+
+    private var appIconView: some View {
+        Image(nsImage: NSApp.applicationIconImage)
+            .resizable()
+            .scaledToFit()
+            .frame(width: iconLength, height: iconLength)
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(.quaternary, lineWidth: 1)
+            )
+    }
+
+    @ViewBuilder
+    private var primaryActionButton: some View {
+        switch viewModel.helperState {
+        case .notInstalled:
+            Button(localized("btm.settings.install")) {
+                viewModel.installHelper()
+                viewModel.load()
+            }
+            .buttonStyle(.borderedProminent)
+        case .failed:
+            Button(localized("btm.settings.retry")) {
+                viewModel.installHelper()
+                viewModel.load()
+            }
+            .buttonStyle(.borderedProminent)
+        case .installing:
+            Button(localized("btm.settings.state.installing")) {}
+                .buttonStyle(.bordered)
+                .disabled(true)
+        case .installed:
+            Button(localized("btm.settings.reinstall_now")) {
+                viewModel.installHelper()
+                viewModel.load()
+            }
+            .buttonStyle(.bordered)
         }
     }
 
-    private var statusText: String {
+    private var statusBadge: some View {
+        let (icon, tint): (String, Color) = {
+            switch viewModel.helperState {
+            case .installed:
+                return ("checkmark.circle.fill", .green)
+            case .installing:
+                return ("clock.fill", .orange)
+            case .failed:
+                return ("xmark.octagon.fill", .red)
+            case .notInstalled:
+                return ("minus.circle.fill", .gray)
+            }
+        }()
+
+        return Image(systemName: icon)
+            .font(.body)
+            .foregroundStyle(tint)
+    }
+
+    private var generalStateFooter: String {
+        let state = localized(statusStateKey)
+        let compatibility = localized(viewModel.compatibilityStatusKey)
+        let compatibilityLabel = localized("btm.settings.compatibility_status")
+        return "\(state) · \(compatibilityLabel): \(compatibility)"
+    }
+
+    private var statusStateKey: String {
         switch viewModel.helperState {
         case .notInstalled:
-            return localized("btm.settings.state.not_installed")
+            return "btm.settings.state.not_installed"
         case .installing:
-            return localized("btm.settings.state.installing")
+            return "btm.settings.state.installing"
         case .installed:
-            return localized("btm.settings.state.installed")
+            return "btm.settings.state.installed"
         case .failed:
-            return localized("btm.settings.state.failed")
+            return "btm.settings.state.failed"
         }
     }
+
+    private var appName: String {
+        if let display = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String, !display.isEmpty {
+            return display
+        }
+        if let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String, !name.isEmpty {
+            return name
+        }
+        return "BackgroundPlus"
+    }
+
+    private var appVersion: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "0"
+        let build = info?["CFBundleVersion"] as? String ?? "0"
+        return "\(short) (\(build))"
+    }
+
+    private var copyrightText: String {
+        let year = Calendar.current.component(.year, from: .now)
+        return String(format: localized("btm.settings.about.copyright"), year)
+    }
+
+    private var manualUninstallCommand: String {
+        "sudo launchctl bootout system/\(helperBundleIdentifier) && sudo rm -f /Library/PrivilegedHelperTools/\(helperBundleIdentifier)"
+    }
+
+    private func openProjectHomepage() {
+        guard let url = URL(string: "https://github.com/jdjingdian/BackgroundPlus") else { return }
+        NSWorkspace.shared.open(url)
+    }
+
 }

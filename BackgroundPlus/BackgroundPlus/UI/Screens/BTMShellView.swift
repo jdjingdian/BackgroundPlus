@@ -4,22 +4,16 @@ struct BTMShellView: View {
     @ObservedObject var viewModel: BTMViewModel
 
     @State private var showDeleteSheet = false
-    @State private var showSettingsSheet = false
     @State private var currentPlan: DeletePlan?
     @State private var currentRisk: RiskLevel = .low
     @State private var currentConfirmation: ConfirmationLevel = .single
 
     var body: some View {
         NavigationSplitView {
-            BTMEntryListContainerView(viewModel: viewModel) {
-                showSettingsSheet = true
-            }
+            BTMEntryListContainerView(viewModel: viewModel)
         } detail: {
             BTMEntryDetailContainerView(
                 viewModel: viewModel,
-                openSettings: {
-                    showSettingsSheet = true
-                },
                 requestDelete: { entry in
                     let planning = viewModel.planning(for: entry)
                     currentPlan = planning.0
@@ -49,9 +43,6 @@ struct BTMShellView: View {
                     }
                 )
             }
-        }
-        .sheet(isPresented: $showSettingsSheet) {
-            HelperSettingsContainerView(viewModel: viewModel)
         }
     }
 }

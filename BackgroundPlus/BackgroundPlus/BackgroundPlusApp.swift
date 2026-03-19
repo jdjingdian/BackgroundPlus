@@ -9,9 +9,15 @@ import SwiftUI
 
 @main
 struct BackgroundPlusApp: App {
+    @StateObject private var viewModel = BTMViewModel()
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(viewModel: viewModel)
+        }
+
+        Settings {
+            HelperSettingsContainerView(viewModel: viewModel)
         }
     }
 }

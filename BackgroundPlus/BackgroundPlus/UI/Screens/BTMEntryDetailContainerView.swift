@@ -2,7 +2,6 @@ import SwiftUI
 
 struct BTMEntryDetailContainerView: View {
     @ObservedObject var viewModel: BTMViewModel
-    let openSettings: () -> Void
     let requestDelete: (BTMEntry) -> Void
 
     var body: some View {
@@ -11,7 +10,7 @@ struct BTMEntryDetailContainerView: View {
                 ProgressView(localized("btm.list.state.loading"))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if viewModel.shouldShowInstallPrompt {
-                BTMMissingHelperView(openSettings: openSettings)
+                BTMMissingHelperView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let entry = viewModel.selectedEntry {
                 detailContent(entry: entry)

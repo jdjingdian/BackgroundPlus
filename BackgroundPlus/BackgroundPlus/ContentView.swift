@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var viewModel = BTMViewModel()
+    @ObservedObject var viewModel: BTMViewModel
 
     var body: some View {
         BTMShellView(viewModel: viewModel)
@@ -9,5 +9,5 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView()
+    ContentView(viewModel: BTMViewModel())
 }

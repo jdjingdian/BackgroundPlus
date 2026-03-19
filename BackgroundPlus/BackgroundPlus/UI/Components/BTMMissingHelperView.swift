@@ -1,8 +1,6 @@
 import SwiftUI
 
 struct BTMMissingHelperView: View {
-    let openSettings: () -> Void
-
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: "shield.lefthalf.filled.badge.checkmark")
@@ -13,8 +11,8 @@ struct BTMMissingHelperView: View {
             Text("btm.helper.required.body")
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            Button(localized("btm.helper.required.open_settings")) {
-                openSettings()
+            SettingsLink {
+                Text(localized("btm.helper.required.open_settings"))
             }
             .buttonStyle(.borderedProminent)
         }
