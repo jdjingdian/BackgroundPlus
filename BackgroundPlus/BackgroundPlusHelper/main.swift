@@ -138,6 +138,18 @@ private func supportsWriteOperations() -> Bool {
     return supported
 }
 
+private func supportsToggleOperations(writeSupported: Bool? = nil) -> Bool {
+    let baseSupported = writeSupported ?? supportsWriteOperations()
+    guard baseSupported else { return false }
+
+    let args = ProcessInfo.processInfo.arguments
+    if args.contains("--helper-disable-toggle") {
+        helperLog.info("Toggle support disabled by runtime arg --helper-disable-toggle")
+        return false
+    }
+    return true
+}
+
 private func shouldCompareDumpSources() -> Bool {
     let args = ProcessInfo.processInfo.arguments
     if args.contains("--helper-disable-dump-compare") {
@@ -788,6 +800,135 @@ private func performSingleDelete(identifier: String) throws {
     reloadBackgroundTaskManagement()
 }
 
+private struct ToggleMutationResult {
+    let foundTarget: Bool
+    let updated: Bool
+}
+
+private enum ToggleBitSemantic {
+    case enabled
+    case allowed
+}
+
+private func toggleSemanticFromRequest(_ request: HelperWriteRequest) -> ToggleBitSemantic? {
+    guard request.operation == .toggle else { return nil }
+    switch request.modeRawValue {
+    case "enabled":
+        return .enabled
+    case "allowed":
+        return .allowed
+    default:
+        return nil
+    }
+}
+
+private func inferToggleSemantic(dict: [String: Any], objects: [Any], identifier: String) -> ToggleBitSemantic {
+    let typeRaw = (dict["type"] as? Int) ?? 0
+    let lowerIdentifier = identifier.lowercased()
+    let lowerURL = urlText(from: resolvedObject(for: "url", in: dict, objects: objects), objects: objects).lowercased()
+
+    if lowerURL.contains("launchdaemons")
+        || lowerURL.contains("launchagents")
+        || lowerURL.contains("privilegedhelpertools")
+        || lowerURL.contains("contents/library/loginitems/")
+        || lowerIdentifier.hasPrefix("4.") {
+        return .allowed
+    }
+
+    // daemon/agent/developer and legacy daemon/agent should follow allowed/disallowed semantics.
+    if typeRaw == 0x10 || typeRaw == 0x10010 || typeRaw == 0x3 || typeRaw == 0x10008 || typeRaw == 0x20 {
+        return .allowed
+    }
+
+    // app/login entries should follow enabled/disabled semantics.
+    return .enabled
+}
+
+private func setIdentifierToggleState(
+    _ identifier: String,
+    enabled: Bool,
+    semantic: ToggleBitSemantic?,
+    in storeURL: URL
+) throws -> ToggleMutationResult {
+    let data = try Data(contentsOf: storeURL)
+    var format = PropertyListSerialization.PropertyListFormat.binary
+    guard let root = try PropertyListSerialization.propertyList(
+        from: data,
+        options: [.mutableContainersAndLeaves],
+        format: &format
+    ) as? NSMutableDictionary else {
+        throw BTMWriteError.malformedStore
+    }
+
+    guard let objects = root["$objects"] as? NSMutableArray else {
+        throw BTMWriteError.malformedStore
+    }
+
+    let objectSnapshot = objects.compactMap { $0 }
+    var targetUIDs = Set<Int>()
+
+    for (index, object) in objectSnapshot.enumerated() {
+        guard let dict = object as? [String: Any] else { continue }
+        guard let identifierUID = uidValue(from: dict["identifier"]) else { continue }
+        if stringFromObjects(objectSnapshot, uid: identifierUID) == identifier {
+            targetUIDs.insert(index)
+        }
+    }
+
+    guard !targetUIDs.isEmpty else {
+        return ToggleMutationResult(foundTarget: false, updated: false)
+    }
+
+    var changed = false
+
+    for uid in targetUIDs where uid < objects.count {
+        guard let dict = objects[uid] as? NSMutableDictionary else { continue }
+        let semanticForEntry = semantic ?? inferToggleSemantic(dict: dict as? [String: Any] ?? [:], objects: objectSnapshot, identifier: identifier)
+        let bitMask = semanticForEntry == .allowed ? 0x2 : 0x1
+        let current = (dict["disposition"] as? Int) ?? 0
+        let updated = enabled ? (current | bitMask) : (current & ~bitMask)
+        if updated != current {
+            dict["disposition"] = updated
+            changed = true
+        }
+    }
+
+    if changed {
+        let updatedData = try PropertyListSerialization.data(fromPropertyList: root, format: .binary, options: 0)
+        try updatedData.write(to: storeURL, options: .atomic)
+    }
+
+    return ToggleMutationResult(foundTarget: true, updated: changed)
+}
+
+private func performSingleToggle(identifier: String, enabled: Bool, semantic: ToggleBitSemantic?) throws {
+    let stores = discoverBTMStoreFiles()
+    guard !stores.isEmpty else {
+        throw BTMWriteError.noStoreFiles
+    }
+
+    var foundFromAnyStore = false
+    var updatedAnyStore = false
+
+    for store in stores {
+        let result = try setIdentifierToggleState(identifier, enabled: enabled, semantic: semantic, in: store)
+        foundFromAnyStore = foundFromAnyStore || result.foundTarget
+        updatedAnyStore = updatedAnyStore || result.updated
+    }
+
+    guard foundFromAnyStore else {
+        throw BTMWriteError.targetNotFound(identifier)
+    }
+
+    if updatedAnyStore {
+        reloadBackgroundTaskManagement()
+    } else {
+        helperLog.info(
+            "Toggle request resulted in no-op identifier=\(identifier, privacy: .public) targetEnabled=\(enabled, privacy: .public) semantic=\(String(describing: semantic), privacy: .public)"
+        )
+    }
+}
+
 private func fetchBTMDump(_ request: HelperDumpRequest) -> HelperDumpResponse {
     helperLog.info("Received dump request, version=\(request.version)")
     guard request.version == helperProtocolVersion else {
@@ -838,19 +979,25 @@ private func fetchCapabilities(_ request: HelperCapabilitiesRequest) -> HelperCa
         )
     }
 
+    let writeSupported = supportsWriteOperations()
+    let toggleSupported = supportsToggleOperations(writeSupported: writeSupported)
+    let writeSchemaVersion = toggleSupported ? 2 : (writeSupported ? 1 : 0)
+
     return HelperCapabilitiesResponse(
         version: helperCapabilitiesRouteVersion,
         helperVersion: currentHelperVersion(),
         interfaceVersion: helperInterfaceVersion,
-        supportsWriteOperations: supportsWriteOperations(),
-        writeSchemaVersion: supportsWriteOperations() ? 1 : 0,
+        supportsWriteOperations: writeSupported,
+        writeSchemaVersion: writeSchemaVersion,
         errorCode: nil,
         errorMessage: nil
     )
 }
 
 private func performWrite(_ request: HelperWriteRequest) -> HelperWriteResponse {
-    helperLog.info("Received write request op=\(request.operation.rawValue, privacy: .public) identifier=\(request.identifier, privacy: .public)")
+    helperLog.info(
+        "Received write request op=\(request.operation.rawValue, privacy: .public) identifier=\(request.identifier, privacy: .public) enabled=\(String(describing: request.enabled), privacy: .public)"
+    )
     guard request.version == helperWriteRouteVersion else {
         helperLog.error("Write route mismatch: expected=\(helperWriteRouteVersion) actual=\(request.version)")
         return HelperWriteResponse(
@@ -903,16 +1050,34 @@ private func performWrite(_ request: HelperWriteRequest) -> HelperWriteResponse 
         switch request.operation {
         case .delete:
             try performSingleDelete(identifier: identifier)
+            helperLog.info("Delete write succeeded identifier=\(identifier, privacy: .public)")
         case .toggle:
-            return HelperWriteResponse(
-                version: helperWriteRouteVersion,
-                errorCode: "write_not_supported",
-                errorMessage: "toggle_not_supported_yet"
+            guard let enabled = request.enabled else {
+                return HelperWriteResponse(
+                    version: helperWriteRouteVersion,
+                    errorCode: "invalid_request",
+                    errorMessage: "invalid_request: missing enabled"
+                )
+            }
+            guard supportsToggleOperations(writeSupported: true) else {
+                helperLog.error("Toggle write blocked: toggle operation unsupported on current system")
+                return HelperWriteResponse(
+                    version: helperWriteRouteVersion,
+                    errorCode: "toggle_not_supported",
+                    errorMessage: "toggle_not_supported"
+                )
+            }
+            let semantic = toggleSemanticFromRequest(request)
+            try performSingleToggle(identifier: identifier, enabled: enabled, semantic: semantic)
+            helperLog.info(
+                "Toggle write succeeded identifier=\(identifier, privacy: .public) targetEnabled=\(enabled, privacy: .public) semantic=\(String(describing: semantic), privacy: .public)"
             )
         }
         return HelperWriteResponse(version: helperWriteRouteVersion, errorCode: nil, errorMessage: nil)
     } catch {
-        helperLog.error("Write execution failed: \(error.localizedDescription, privacy: .public)")
+        helperLog.error(
+            "Write execution failed op=\(request.operation.rawValue, privacy: .public) identifier=\(identifier, privacy: .public) error=\(error.localizedDescription, privacy: .public)"
+        )
         return HelperWriteResponse(
             version: helperWriteRouteVersion,
             errorCode: "execution_failed",

@@ -84,6 +84,7 @@ struct BackgroundPlusTests {
         #expect(BTMCoreError.helperVersionMismatch.errorDescription == "btm.helper.error.version_mismatch")
         #expect(BTMCoreError.helperCapabilitiesUnavailable.errorDescription == "btm.helper.error.capabilities_unavailable")
         #expect(BTMCoreError.helperWriteUnsupported.errorDescription == "btm.helper.error.write_unsupported")
+        #expect(BTMCoreError.helperToggleUnsupported.errorDescription == "btm.helper.error.toggle_unsupported")
         #expect(BTMCoreError.permissionDenied.errorDescription == "btm.error.permission_denied")
     }
 
@@ -411,10 +412,198 @@ struct BackgroundPlusTests {
         viewModel.toggleOperationsSupported = true
         viewModel.entries = [entry]
         viewModel.setEnabledState(false, for: entry)
-        try? await Task.sleep(nanoseconds: 120_000_000)
+        try? await Task.sleep(nanoseconds: 300_000_000)
 
         #expect(viewModel.enabledState(for: entry))
         #expect(viewModel.errorKey == "btm.helper.error.communication")
+    }
+
+    @Test func toggleWriteUnsupportedMapsToToggleError() async {
+        let helper = MockHelperClient(
+            dump: BTMFixture.sampleDump,
+            capabilities: HelperCapabilities(helperVersion: "1.0.0", interfaceVersion: 1, supportsWriteOperations: true, writeSchemaVersion: 2),
+            writeError: BTMCoreError.helperToggleUnsupported
+        )
+        let viewModel = BTMViewModel(
+            manager: BTMManager(
+                source: FixtureDataSource(),
+                database: InMemoryDatabaseAdapter(seed: []),
+                backupManager: BackupManager(base: URL(fileURLWithPath: NSTemporaryDirectory()))
+            ),
+            helperClient: helper
+        )
+        let entry = BTMEntry(
+            uuid: "toggle-unsupported",
+            identifier: "toggle.unsupported",
+            name: "Toggle Unsupported",
+            type: .app,
+            category: .loginItem,
+            disposition: "[enabled]",
+            url: "file:///Applications/ToggleUnsupported.app/",
+            generation: 1,
+            bundleID: "toggle.unsupported",
+            parentIdentifier: nil,
+            embeddedItemIdentifiers: []
+        )
+
+        viewModel.writeOperationsSupported = true
+        viewModel.toggleOperationsSupported = true
+        viewModel.entries = [entry]
+        viewModel.setEnabledState(false, for: entry)
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        #expect(viewModel.enabledState(for: entry))
+        #expect(viewModel.errorKey == "btm.helper.error.toggle_unsupported")
+    }
+
+    @Test func toggleWritePermissionDeniedMapsToPermissionError() async {
+        let helper = MockHelperClient(
+            dump: BTMFixture.sampleDump,
+            capabilities: HelperCapabilities(helperVersion: "1.0.0", interfaceVersion: 1, supportsWriteOperations: true, writeSchemaVersion: 2),
+            writeError: BTMCoreError.permissionDenied
+        )
+        let viewModel = BTMViewModel(
+            manager: BTMManager(
+                source: FixtureDataSource(),
+                database: InMemoryDatabaseAdapter(seed: []),
+                backupManager: BackupManager(base: URL(fileURLWithPath: NSTemporaryDirectory()))
+            ),
+            helperClient: helper
+        )
+        let entry = BTMEntry(
+            uuid: "toggle-permission",
+            identifier: "toggle.permission",
+            name: "Toggle Permission",
+            type: .app,
+            category: .loginItem,
+            disposition: "[enabled]",
+            url: "file:///Applications/TogglePermission.app/",
+            generation: 1,
+            bundleID: "toggle.permission",
+            parentIdentifier: nil,
+            embeddedItemIdentifiers: []
+        )
+
+        viewModel.writeOperationsSupported = true
+        viewModel.toggleOperationsSupported = true
+        viewModel.entries = [entry]
+        viewModel.setEnabledState(false, for: entry)
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        #expect(viewModel.enabledState(for: entry))
+        #expect(viewModel.errorKey == "btm.error.permission_denied")
+    }
+
+    @Test func toggleStateUsesEnabledForLoginButAllowedForBackground() {
+        let viewModel = BTMViewModel(
+            manager: BTMManager(
+                source: FixtureDataSource(),
+                database: InMemoryDatabaseAdapter(seed: []),
+                backupManager: BackupManager(base: URL(fileURLWithPath: NSTemporaryDirectory()))
+            ),
+            helperClient: MockHelperClient(
+                dump: BTMFixture.sampleDump,
+                capabilities: HelperCapabilities(helperVersion: "1.0.0", interfaceVersion: 1)
+            )
+        )
+
+        let loginEntry = BTMEntry(
+            uuid: "login-semantic",
+            identifier: "2.login.semantic",
+            name: "Login Semantic",
+            type: .app,
+            category: .loginItem,
+            disposition: "[disabled, allowed, visible, notified] (0xa)",
+            url: "file:///Applications/LoginSemantic.app/",
+            generation: 1,
+            bundleID: "login.semantic",
+            parentIdentifier: nil,
+            embeddedItemIdentifiers: []
+        )
+        let backgroundEntry = BTMEntry(
+            uuid: "background-semantic",
+            identifier: "16.background.semantic",
+            name: "Background Semantic",
+            type: .daemon,
+            category: .backgroundItem,
+            disposition: "[enabled, disallowed, visible, notified] (0x1)",
+            url: "file:///Library/LaunchDaemons/background.semantic.plist",
+            generation: 1,
+            bundleID: "",
+            parentIdentifier: nil,
+            embeddedItemIdentifiers: []
+        )
+        let legacyBackgroundEntry = BTMEntry(
+            uuid: "legacy-background-semantic",
+            identifier: "16.legacy.background.semantic",
+            name: "Legacy Background Semantic",
+            type: .daemon,
+            category: .backgroundItem,
+            disposition: "[enabled, disallowed, visible, notified] (0x9)",
+            url: "file:///Library/LaunchDaemons/legacy.background.semantic.plist",
+            generation: 1,
+            bundleID: "",
+            parentIdentifier: nil,
+            embeddedItemIdentifiers: []
+        )
+
+        #expect(!viewModel.enabledState(for: loginEntry))
+        #expect(!viewModel.enabledState(for: backgroundEntry))
+        #expect(!viewModel.enabledState(for: legacyBackgroundEntry))
+    }
+
+    @Test func toggleWriteUsesSemanticModeForEntryCategory() async {
+        let helper = RecordingHelperClient(
+            dump: BTMFixture.sampleDump,
+            capabilities: HelperCapabilities(helperVersion: "1.0.0", interfaceVersion: 1, supportsWriteOperations: true, writeSchemaVersion: 2)
+        )
+        let viewModel = BTMViewModel(
+            manager: BTMManager(
+                source: FixtureDataSource(),
+                database: InMemoryDatabaseAdapter(seed: []),
+                backupManager: BackupManager(base: URL(fileURLWithPath: NSTemporaryDirectory()))
+            ),
+            helperClient: helper
+        )
+
+        let loginEntry = BTMEntry(
+            uuid: "login-mode",
+            identifier: "2.login.mode",
+            name: "Login Mode",
+            type: .app,
+            category: .loginItem,
+            disposition: "[enabled, allowed, visible, notified] (0xb)",
+            url: "file:///Applications/LoginMode.app/",
+            generation: 1,
+            bundleID: "login.mode",
+            parentIdentifier: nil,
+            embeddedItemIdentifiers: []
+        )
+        let backgroundEntry = BTMEntry(
+            uuid: "background-mode",
+            identifier: "16.background.mode",
+            name: "Background Mode",
+            type: .daemon,
+            category: .backgroundItem,
+            disposition: "[enabled, allowed, visible, notified] (0x3)",
+            url: "file:///Library/LaunchDaemons/background.mode.plist",
+            generation: 1,
+            bundleID: "",
+            parentIdentifier: nil,
+            embeddedItemIdentifiers: []
+        )
+
+        viewModel.writeOperationsSupported = true
+        viewModel.toggleOperationsSupported = true
+        viewModel.entries = [loginEntry, backgroundEntry]
+
+        viewModel.setEnabledState(false, for: loginEntry)
+        viewModel.setEnabledState(false, for: backgroundEntry)
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        let modeValues = helper.requests.map(\.modeRawValue)
+        #expect(modeValues.contains("enabled"))
+        #expect(modeValues.contains("allowed"))
     }
 
     @Test func btmFixtureDeleteOnCopiedFileRemovesTargetIdentifier() throws {
@@ -441,6 +630,30 @@ struct BackgroundPlusTests {
         let remainingCount = countsAfter[targetIdentifier] ?? 0
         #expect(remainingCount == 0)
         #expect(countsAfter.values.reduce(0, +) == countsBefore.values.reduce(0, +) - removedCount)
+    }
+
+    @Test func btmFixtureToggleOnCopiedFileUpdatesDispositionBit() throws {
+        guard let fixtureURL = btmFixtureFileURL() else {
+            return
+        }
+        let workingURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("BackgroundItems-v13-toggle-\(UUID().uuidString).btm")
+        defer { try? FileManager.default.removeItem(at: workingURL) }
+        try FileManager.default.copyItem(at: fixtureURL, to: workingURL)
+
+        let targetIdentifier = "8.com.tencent.Lemon.trash"
+        let before = try BTMArchiveTestSupport.dispositionValues(for: targetIdentifier, in: workingURL)
+        #expect(!before.isEmpty)
+        guard let firstBefore = before.first else { return }
+
+        let initialEnabled = (firstBefore & 0x1) != 0
+        let expectedEnabled = !initialEnabled
+        let mutation = try BTMArchiveTestSupport.setIdentifierEnabled(targetIdentifier, enabled: expectedEnabled, in: workingURL)
+        #expect(mutation.foundTarget)
+
+        let after = try BTMArchiveTestSupport.dispositionValues(for: targetIdentifier, in: workingURL)
+        #expect(!after.isEmpty)
+        #expect(after.allSatisfy { (($0 & 0x1) != 0) == expectedEnabled })
     }
 
     private func parseKeys(from fileURL: URL) throws -> Set<String> {
@@ -501,6 +714,34 @@ private struct MockHelperClient: PrivilegedHelperClient {
             throw writeError
         }
     }
+
+    func performSelfUninstall() throws {}
+}
+
+@MainActor
+private final class RecordingHelperClient: PrivilegedHelperClient {
+    let dump: String
+    let capabilities: HelperCapabilities
+    var requests: [HelperWriteRequest] = []
+
+    init(dump: String, capabilities: HelperCapabilities) {
+        self.dump = dump
+        self.capabilities = capabilities
+    }
+
+    func fetchBTMDump() throws -> DumpFetchResult {
+        DumpFetchResult(dump: dump, sourceMethod: .fixture)
+    }
+
+    func fetchHelperCapabilities() throws -> HelperCapabilities {
+        capabilities
+    }
+
+    func performWrite(_ request: HelperWriteRequest) throws {
+        requests.append(request)
+    }
+
+    func performSelfUninstall() throws {}
 }
 
 private struct FlappingHelperClient: PrivilegedHelperClient {
@@ -520,6 +761,8 @@ private struct FlappingHelperClient: PrivilegedHelperClient {
     }
 
     func performWrite(_ request: HelperWriteRequest) throws {}
+
+    func performSelfUninstall() throws {}
 }
 
 private struct FailingBackupManager: BackupManaging {
@@ -531,6 +774,11 @@ private struct FailingBackupManager: BackupManaging {
 }
 
 private enum BTMArchiveTestSupport {
+    struct ToggleMutationResult {
+        let foundTarget: Bool
+        let updated: Bool
+    }
+
     static func identifierCounts(in fileURL: URL) throws -> [String: Int] {
         var counts: [String: Int] = [:]
         for identifier in try identifiers(in: fileURL) {
@@ -625,6 +873,77 @@ private enum BTMArchiveTestSupport {
         let updatedData = try PropertyListSerialization.data(fromPropertyList: root, format: .binary, options: 0)
         try updatedData.write(to: storeURL, options: .atomic)
         return true
+    }
+
+    static func dispositionValues(for identifier: String, in fileURL: URL) throws -> [Int] {
+        let data = try Data(contentsOf: fileURL)
+        var format = PropertyListSerialization.PropertyListFormat.binary
+        guard let root = try PropertyListSerialization.propertyList(
+            from: data,
+            options: [.mutableContainersAndLeaves],
+            format: &format
+        ) as? NSMutableDictionary,
+              let objects = root["$objects"] as? NSMutableArray else {
+            return []
+        }
+
+        let snapshot = objects.compactMap { $0 }
+        var values: [Int] = []
+        for object in snapshot {
+            guard let dict = object as? [String: Any] else { continue }
+            guard let identifierUID = uidValue(from: dict["identifier"]) else { continue }
+            guard identifierUID >= 0, identifierUID < snapshot.count else { continue }
+            guard (snapshot[identifierUID] as? String) == identifier else { continue }
+            values.append((dict["disposition"] as? Int) ?? 0)
+        }
+        return values
+    }
+
+    static func setIdentifierEnabled(_ identifier: String, enabled: Bool, in storeURL: URL) throws -> ToggleMutationResult {
+        let data = try Data(contentsOf: storeURL)
+        var format = PropertyListSerialization.PropertyListFormat.binary
+        guard let root = try PropertyListSerialization.propertyList(
+            from: data,
+            options: [.mutableContainersAndLeaves],
+            format: &format
+        ) as? NSMutableDictionary,
+              let objects = root["$objects"] as? NSMutableArray else {
+            return ToggleMutationResult(foundTarget: false, updated: false)
+        }
+
+        let objectSnapshot = objects.compactMap { $0 }
+        var targetUIDs = Set<Int>()
+        for (index, object) in objectSnapshot.enumerated() {
+            guard let dict = object as? [String: Any] else { continue }
+            guard let identifierUID = uidValue(from: dict["identifier"]) else { continue }
+            if identifierUID >= 0, identifierUID < objectSnapshot.count,
+               (objectSnapshot[identifierUID] as? String) == identifier {
+                targetUIDs.insert(index)
+            }
+        }
+
+        guard !targetUIDs.isEmpty else {
+            return ToggleMutationResult(foundTarget: false, updated: false)
+        }
+
+        var changed = false
+        let enabledBit = 0x1
+        for uid in targetUIDs where uid < objects.count {
+            guard let dict = objects[uid] as? NSMutableDictionary else { continue }
+            let current = (dict["disposition"] as? Int) ?? 0
+            let updated = enabled ? (current | enabledBit) : (current & ~enabledBit)
+            if updated != current {
+                dict["disposition"] = updated
+                changed = true
+            }
+        }
+
+        if changed {
+            let updatedData = try PropertyListSerialization.data(fromPropertyList: root, format: .binary, options: 0)
+            try updatedData.write(to: storeURL, options: .atomic)
+        }
+
+        return ToggleMutationResult(foundTarget: true, updated: changed)
     }
 
     private static func makeUID(_ value: Int) -> [String: Any] {

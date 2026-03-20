@@ -414,7 +414,7 @@ final class BTMViewModel: ObservableObject {
         if let override = entryEnabledOverrides[entry.id] {
             return override
         }
-        return inferredEnabledState(from: entry.disposition)
+        return inferredToggleState(for: entry)
     }
 
     func setEnabledState(_ isEnabled: Bool, for entry: BTMEntry) {
@@ -431,7 +431,7 @@ final class BTMViewModel: ObservableObject {
             version: helperWriteRouteVersion,
             operation: .toggle,
             identifier: entry.identifier,
-            modeRawValue: nil,
+            modeRawValue: toggleWriteModeRawValue(for: entry),
             enabled: isEnabled
         )
 
@@ -550,6 +550,40 @@ final class BTMViewModel: ObservableObject {
             return true
         }
         return true
+    }
+
+    private func inferredAllowedState(from disposition: String) -> Bool {
+        let lowercased = disposition.lowercased()
+        if lowercased.contains("disallowed") {
+            return false
+        }
+        if lowercased.contains("allowed") {
+            return true
+        }
+        return inferredEnabledState(from: disposition)
+    }
+
+    private func shouldUseAllowedToggleSemantic(for entry: BTMEntry) -> Bool {
+        if entry.category == .backgroundItem {
+            return true
+        }
+        switch entry.type {
+        case .daemon, .agent, .developer:
+            return true
+        case .app, .unknown:
+            return false
+        }
+    }
+
+    private func toggleWriteModeRawValue(for entry: BTMEntry) -> String {
+        shouldUseAllowedToggleSemantic(for: entry) ? "allowed" : "enabled"
+    }
+
+    private func inferredToggleState(for entry: BTMEntry) -> Bool {
+        if shouldUseAllowedToggleSemantic(for: entry) {
+            return inferredAllowedState(from: entry.disposition)
+        }
+        return inferredEnabledState(from: entry.disposition)
     }
 
     private func applyUITestOverrides() {

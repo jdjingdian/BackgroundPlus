@@ -15,6 +15,7 @@
 - Verify low/medium/high confirmation flows.
 - Verify single-entry delete success/failure paths via helper write route.
 - Verify toggle write success/failure and state rollback behavior.
+- Verify toggle can be used as a low-risk write probe before delete validation (toggle -> dump refresh -> state matches).
 - Verify dump refreshes after successful write operations.
 - Verify backup folder opens from result page.
 - Verify operation history shows backup path.

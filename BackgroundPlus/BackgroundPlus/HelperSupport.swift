@@ -292,6 +292,9 @@ struct XPCPrivilegedHelperClient: PrivilegedHelperClient {
             if code == "permission_denied" {
                 throw BTMCoreError.permissionDenied
             }
+            if code == "toggle_not_supported" {
+                throw BTMCoreError.helperToggleUnsupported
+            }
             if code == "write_not_supported" {
                 throw BTMCoreError.helperWriteUnsupported
             }
