@@ -15,10 +15,20 @@ struct BackgroundPlusTests {
     @Test func parserParsesFixture() {
         let parser = BTMDumpParser()
         let output = parser.parse(BTMFixture.sampleDump)
+        let hasLoginApp = output.entries.contains { entry in
+            entry.identifier == "2.cn.magicdian.staticrouter"
+                && entry.type == .app
+                && entry.category == .loginItem
+        }
+        let hasBackgroundDaemon = output.entries.contains { entry in
+            entry.identifier == "16.cn.magicdian.staticrouter.service"
+                && entry.parentIdentifier == "2.cn.magicdian.staticrouter"
+                && entry.category == .backgroundItem
+        }
 
         #expect(output.entries.count == 2)
-        #expect(output.entries.contains(where: { $0.identifier == "2.cn.magicdian.staticrouter" && $0.type == .app }))
-        #expect(output.entries.contains(where: { $0.identifier == "16.cn.magicdian.staticrouter.service" && $0.parentIdentifier == "2.cn.magicdian.staticrouter" }))
+        #expect(hasLoginApp)
+        #expect(hasBackgroundDaemon)
     }
 
     @Test func deletePlanAndRiskForAppIsMedium() {
@@ -93,6 +103,43 @@ struct BackgroundPlusTests {
         let output = parser.parse(raw)
         #expect(output.parseIncomplete)
         #expect(output.entries.count == 1)
+        #expect(output.unknownCategoryCount == 1)
+    }
+
+    @Test func projectorRoutesUnknownEntriesIntoBackgroundList() {
+        let entries: [BTMEntry] = [
+            BTMEntry(
+                uuid: "app",
+                identifier: "2.example.app",
+                name: "Example App",
+                type: .app,
+                category: .loginItem,
+                disposition: "[enabled]",
+                url: "file:///Applications/Example.app/",
+                generation: 1,
+                bundleID: "example.app",
+                parentIdentifier: nil,
+                embeddedItemIdentifiers: []
+            ),
+            BTMEntry(
+                uuid: "unknown",
+                identifier: "unknown.entry",
+                name: "Unknown",
+                type: .unknown,
+                category: .unknown,
+                disposition: "[enabled]",
+                url: "not-a-file-url",
+                generation: 1,
+                bundleID: "",
+                parentIdentifier: nil,
+                embeddedItemIdentifiers: []
+            )
+        ]
+
+        let projection = EntryProjector().project(entries: entries)
+        #expect(projection.loginItems.count == 1)
+        #expect(projection.backgroundItems.count == 1)
+        #expect(projection.unknownItems.count == 1)
     }
 
     @Test func customDetailAvailabilityRequiresIdentifierBundleOrFileURL() {
@@ -113,6 +160,7 @@ struct BackgroundPlusTests {
             identifier: "",
             name: "invalid",
             type: .unknown,
+            category: .unknown,
             disposition: "",
             url: "not-a-file-url",
             generation: 0,
@@ -125,6 +173,7 @@ struct BackgroundPlusTests {
             identifier: "id.valid",
             name: "valid",
             type: .app,
+            category: .loginItem,
             disposition: "",
             url: "not-a-file-url",
             generation: 0,
@@ -156,6 +205,8 @@ struct BackgroundPlusTests {
         let loaded = try manager.loadEntries()
         #expect(loaded.entries.count == 2)
         #expect(loaded.entries.first?.identifier == "2.cn.magicdian.staticrouter")
+        #expect(loaded.projection.loginItems.count == 1)
+        #expect(loaded.projection.backgroundItems.count == 1)
     }
 
     @Test func compatibilityValidatorDetectsOldHelper() {

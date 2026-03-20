@@ -40,8 +40,10 @@ struct BTMShellView: View {
 
     private var sidebar: some View {
         List(selection: $viewModel.selectedSidebarItem) {
-            Label("btm.sidebar.background_modules", systemImage: "switch.2")
-                .tag(BTMSidebarItem.backgroundModules)
+            Label("btm.sidebar.login_items", systemImage: "person.crop.circle.badge.checkmark")
+                .tag(BTMSidebarItem.loginItems)
+            Label("btm.sidebar.background_items", systemImage: "switch.2")
+                .tag(BTMSidebarItem.backgroundItems)
         }
         .navigationTitle(Text("btm.list.title"))
     }

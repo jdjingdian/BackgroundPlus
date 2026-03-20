@@ -29,12 +29,15 @@ enum HelperCompatibilityState: Equatable {
 }
 
 enum BTMSidebarItem: Hashable {
-    case backgroundModules
+    case loginItems
+    case backgroundItems
 }
 
 final class BTMViewModel: ObservableObject {
     @Published var entries: [BTMEntry] = []
+    @Published private(set) var projectedEntries: BTMEntryProjection = .empty
     @Published var parseIncomplete = false
+    @Published var classificationIncomplete = false
     @Published var selectedEntryID: String?
     @Published var mode: DeleteMode = .safe
     @Published var result: OperationRecord?
@@ -46,7 +49,11 @@ final class BTMViewModel: ObservableObject {
     @Published var entryLoadingState: EntryLoadingState = .idle
     @Published var helperCompatibilityState: HelperCompatibilityState = .unknown
     @Published var helperRecovered = false
-    @Published var selectedSidebarItem: BTMSidebarItem? = .backgroundModules
+    @Published var selectedSidebarItem: BTMSidebarItem? = .loginItems {
+        didSet {
+            syncSelectionForSidebarChange()
+        }
+    }
     @Published var customDetailEntryID: String?
     @Published var entryEnabledOverrides: [String: Bool] = [:]
     @Published var customDetailUnavailableMessageKey: String?
@@ -96,11 +103,21 @@ final class BTMViewModel: ObservableObject {
     }
 
     var filteredEntries: [BTMEntry] {
-        guard !searchText.isEmpty else { return entries }
-        return entries.filter {
+        let candidates = entriesForSelectedSidebar
+        guard !searchText.isEmpty else { return candidates }
+        return candidates.filter {
             $0.identifier.localizedCaseInsensitiveContains(searchText)
                 || $0.bundleID.localizedCaseInsensitiveContains(searchText)
                 || $0.url.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    var emptyStateKeyForSelectedSidebar: String {
+        switch selectedSidebarItem {
+        case .loginItems:
+            return "btm.list.empty.login_items"
+        case .backgroundItems, .none:
+            return "btm.list.empty.background_items"
         }
     }
 
@@ -191,12 +208,14 @@ final class BTMViewModel: ObservableObject {
                 let result = try manager.loadEntries()
                 guard let self else { return }
                 self.entries = result.entries
+                self.projectedEntries = result.projection
                 self.parseIncomplete = result.parseIncomplete
+                self.classificationIncomplete = result.unknownCategoryCount > 0
                 self.applyUITestOverrides()
+                self.projectedEntries = manager.projectEntries(self.entries)
+                self.classificationIncomplete = !self.projectedEntries.unknownItems.isEmpty
                 self.errorKey = nil
-                if self.selectedEntryID == nil {
-                    self.selectedEntryID = self.entries.first?.id
-                }
+                self.syncSelectionForSidebarChange()
                 let validIDs = Set(self.entries.map(\.id))
                 self.entryEnabledOverrides = self.entryEnabledOverrides.filter { validIDs.contains($0.key) }
                 if let customDetailEntryID = self.customDetailEntryID, !validIDs.contains(customDetailEntryID) {
@@ -304,9 +323,11 @@ final class BTMViewModel: ObservableObject {
 
     private func moveToRequiresHelperState() {
         entries = []
+        projectedEntries = .empty
         selectedEntryID = nil
         customDetailEntryID = nil
         parseIncomplete = false
+        classificationIncomplete = false
         entryLoadingState = .requiresHelper
     }
 
@@ -338,6 +359,7 @@ final class BTMViewModel: ObservableObject {
                 identifier: "",
                 name: "Invalid Entry For UI Test",
                 type: .unknown,
+                category: .unknown,
                 disposition: "[enabled]",
                 url: "not-a-file-url",
                 generation: 0,
@@ -361,6 +383,7 @@ final class BTMViewModel: ObservableObject {
                 identifier: "\(source.identifier)-\(index)",
                 name: "\(source.name) Long Long Long Name \(index) For Truncation Boundary Validation",
                 type: source.type,
+                category: source.category,
                 disposition: source.disposition,
                 url: index.isMultiple(of: 3) ? "not-a-file-url" : source.url,
                 generation: source.generation,
@@ -372,5 +395,22 @@ final class BTMViewModel: ObservableObject {
         }
 
         return expanded
+    }
+
+    private var entriesForSelectedSidebar: [BTMEntry] {
+        switch selectedSidebarItem {
+        case .loginItems:
+            return projectedEntries.loginItems
+        case .backgroundItems, .none:
+            return projectedEntries.backgroundItems
+        }
+    }
+
+    private func syncSelectionForSidebarChange() {
+        let visibleIDs = Set(filteredEntries.map(\.id))
+        if let selectedEntryID, visibleIDs.contains(selectedEntryID) {
+            return
+        }
+        selectedEntryID = filteredEntries.first?.id
     }
 }

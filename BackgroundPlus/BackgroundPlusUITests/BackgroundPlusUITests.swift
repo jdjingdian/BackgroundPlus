@@ -81,6 +81,22 @@ final class BackgroundPlusUITests: XCTestCase {
     }
 
     @MainActor
+    func testSidebarSplitsLoginAndBackgroundSections() throws {
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+
+        let loginSidebarItem = app.staticTexts["Open at Login"]
+        XCTAssertTrue(loginSidebarItem.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Allow in Background"].exists)
+        XCTAssertTrue(app.staticTexts["Static Router"].exists)
+
+        let backgroundSidebarItem = app.staticTexts["Allow in Background"]
+        backgroundSidebarItem.click()
+        XCTAssertTrue(app.staticTexts["cn.magicdian.staticrouter.helper"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
     func testLargeListRendersManyRows() throws {
         let app = XCUIApplication()
         app.launchArguments += ["--ui-test-fixture", "--ui-test-many-entries", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]

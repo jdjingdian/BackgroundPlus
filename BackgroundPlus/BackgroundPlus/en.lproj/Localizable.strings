@@ -1,6 +1,8 @@
 "btm.list.title" = "Background Items";
 "btm.list.search_placeholder" = "Search Identifier / Bundle / Path";
 "btm.list.empty" = "No entries found";
+"btm.list.empty.login_items" = "No login items found";
+"btm.list.empty.background_items" = "No background items found";
 "btm.list.refresh" = "Refresh";
 "btm.list.state.loading" = "Loading BTM data...";
 "btm.list.open_custom_detail" = "Open Custom Detail";
@@ -8,6 +10,8 @@
 "btm.list.toggle.accessibility.value.on" = "Enabled";
 "btm.list.toggle.accessibility.value.off" = "Disabled";
 "btm.sidebar.background_modules" = "Background Modules";
+"btm.sidebar.login_items" = "Open at Login";
+"btm.sidebar.background_items" = "Allow in Background";
 "btm.custom_detail.title" = "My Custom Feature";
 "btm.custom_detail.back" = "Back";
 "btm.custom_detail.unavailable.title" = "Unavailable";
@@ -95,6 +99,7 @@
 
 "btm.error.backup_failed" = "Backup failed. Write operation was blocked.";
 "btm.error.parse_incomplete" = "Parsing incomplete. Results may be inaccurate.";
+"btm.error.classification_incomplete" = "Classification incomplete. Uncategorized entries are shown in Allow in Background.";
 "btm.error.permission_denied" = "Insufficient permission to perform this action.";
 "btm.error.execution_failed" = "Execution failed: %@";
 "btm.error.unknown" = "An unknown error occurred";

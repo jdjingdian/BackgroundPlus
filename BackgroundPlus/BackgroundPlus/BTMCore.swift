@@ -11,11 +11,18 @@ enum BTMEntryType: String, CaseIterable, Codable {
     case unknown
 }
 
+enum BTMEntryCategory: String, CaseIterable, Codable {
+    case loginItem
+    case backgroundItem
+    case unknown
+}
+
 struct BTMEntry: Identifiable, Hashable, Codable {
     let uuid: String
     let identifier: String
     let name: String
     let type: BTMEntryType
+    let category: BTMEntryCategory
     let disposition: String
     let url: String
     let generation: Int
@@ -130,14 +137,25 @@ struct OperationRecord: Identifiable, Codable {
 
 struct LoadResult {
     let entries: [BTMEntry]
+    let projection: BTMEntryProjection
     let parseIncomplete: Bool
     let unknownFieldCount: Int
+    let unknownCategoryCount: Int
 }
 
 struct BTMParseOutput {
     let entries: [BTMEntry]
     let parseIncomplete: Bool
     let unknownFieldCount: Int
+    let unknownCategoryCount: Int
+}
+
+struct BTMEntryProjection: Equatable {
+    let loginItems: [BTMEntry]
+    let backgroundItems: [BTMEntry]
+    let unknownItems: [BTMEntry]
+
+    static let empty = BTMEntryProjection(loginItems: [], backgroundItems: [], unknownItems: [])
 }
 
 enum BTMCoreError: LocalizedError {
@@ -201,6 +219,7 @@ struct BTMDumpParser {
 
         var entries: [BTMEntry] = []
         var unknownFieldCount = 0
+        var unknownCategoryCount = 0
 
         for chunk in chunks {
             var uuid = ""
@@ -257,11 +276,17 @@ struct BTMDumpParser {
                 unknownFieldCount += 1
                 continue
             }
+            let parsedType = parseType(typeRaw)
             let entry = BTMEntry(
                 uuid: uuid,
                 identifier: identifier,
                 name: name,
-                type: parseType(typeRaw),
+                type: parsedType,
+                category: classifyCategory(
+                    type: parsedType,
+                    url: url,
+                    bundleID: bundleID
+                ),
                 disposition: disposition,
                 url: url,
                 generation: generation,
@@ -269,13 +294,21 @@ struct BTMDumpParser {
                 parentIdentifier: parentIdentifier,
                 embeddedItemIdentifiers: embedded
             )
+            if entry.category == .unknown {
+                unknownCategoryCount += 1
+            }
             if entry.type == .unknown || entry.url.isEmpty {
                 unknownFieldCount += 1
             }
             entries.append(entry)
         }
 
-        return BTMParseOutput(entries: entries, parseIncomplete: unknownFieldCount > 0, unknownFieldCount: unknownFieldCount)
+        return BTMParseOutput(
+            entries: entries,
+            parseIncomplete: unknownFieldCount > 0,
+            unknownFieldCount: unknownFieldCount,
+            unknownCategoryCount: unknownCategoryCount
+        )
     }
 
     private func isEntryStart(_ line: String) -> Bool {
@@ -294,6 +327,53 @@ struct BTMDumpParser {
         if lower.contains("developer") { return .developer }
         if lower.contains("app") { return .app }
         return .unknown
+    }
+
+    private func classifyCategory(type: BTMEntryType, url: String, bundleID: String) -> BTMEntryCategory {
+        let lowerURL = url.lowercased()
+        let isLaunchServicePath = lowerURL.contains("launchdaemons")
+            || lowerURL.contains("launchagents")
+            || lowerURL.contains("privilegedhelpertools")
+        if isLaunchServicePath {
+            return .backgroundItem
+        }
+
+        switch type {
+        case .app:
+            if lowerURL.contains(".app/") || !bundleID.isEmpty {
+                return .loginItem
+            }
+            return .unknown
+        case .daemon, .agent, .developer:
+            return .backgroundItem
+        case .unknown:
+            return .unknown
+        }
+    }
+}
+
+struct EntryProjector {
+    func project(entries: [BTMEntry]) -> BTMEntryProjection {
+        var loginItems: [BTMEntry] = []
+        var backgroundItems: [BTMEntry] = []
+        var unknownItems: [BTMEntry] = []
+
+        for entry in entries {
+            switch entry.category {
+            case .loginItem:
+                loginItems.append(entry)
+            case .backgroundItem:
+                backgroundItems.append(entry)
+            case .unknown:
+                unknownItems.append(entry)
+                backgroundItems.append(entry)
+            }
+        }
+        return BTMEntryProjection(
+            loginItems: loginItems,
+            backgroundItems: backgroundItems,
+            unknownItems: unknownItems
+        )
     }
 }
 
@@ -507,6 +587,7 @@ struct BackupManager: BackupManaging {
 
 final class BTMManager {
     private let parser = BTMDumpParser()
+    private let projector = EntryProjector()
     private let planner = DeletePlanner()
     private let riskAssessor = RiskAssessor()
     private let source: BTMDataSource
@@ -522,7 +603,18 @@ final class BTMManager {
     func loadEntries() throws -> LoadResult {
         let dump = try source.fetchDump()
         let parse = parser.parse(dump)
-        return LoadResult(entries: parse.entries, parseIncomplete: parse.parseIncomplete, unknownFieldCount: parse.unknownFieldCount)
+        let projection = projector.project(entries: parse.entries)
+        return LoadResult(
+            entries: parse.entries,
+            projection: projection,
+            parseIncomplete: parse.parseIncomplete,
+            unknownFieldCount: parse.unknownFieldCount,
+            unknownCategoryCount: parse.unknownCategoryCount
+        )
+    }
+
+    func projectEntries(_ entries: [BTMEntry]) -> BTMEntryProjection {
+        projector.project(entries: entries)
     }
 
     func buildPlan(target: BTMEntry, entries: [BTMEntry], mode: DeleteMode, excludedOptionalIdentifiers: Set<String> = [], parseIncomplete: Bool) -> (DeletePlan, RiskLevel, ConfirmationLevel) {

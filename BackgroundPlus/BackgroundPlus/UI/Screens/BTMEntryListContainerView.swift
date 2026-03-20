@@ -18,6 +18,10 @@ struct BTMEntryListContainerView: View {
                             Text("btm.error.parse_incomplete")
                                 .foregroundStyle(.orange)
                         }
+                        if viewModel.classificationIncomplete {
+                            Text("btm.error.classification_incomplete")
+                                .foregroundStyle(.orange)
+                        }
 
                         if let errorKey = viewModel.errorKey {
                             Text(localized(errorKey))
@@ -39,6 +43,11 @@ struct BTMEntryListContainerView: View {
                                 }
                             )
                             .id(entry.id)
+                        }
+
+                        if viewModel.filteredEntries.isEmpty {
+                            Text(viewModel.emptyStateKeyForSelectedSidebar)
+                                .foregroundStyle(.secondary)
                         }
                     }
                     .onAppear {
