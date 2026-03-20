@@ -7,6 +7,7 @@ private let helperBundleIdentifier = "cn.magicdian.BackgroundPlus.helper"
 private let helperProtocolVersion = 1
 private let helperCapabilitiesRouteVersion = 1
 private let helperWriteRouteVersion = 1
+private let helperUninstallRouteVersion = 1
 private let helperInterfaceVersion = 1
 private let helperLog = Logger(subsystem: helperBundleIdentifier, category: "HelperServer")
 
@@ -55,6 +56,16 @@ private struct HelperWriteResponse: Codable {
     let errorMessage: String?
 }
 
+private struct HelperUninstallRequest: Codable {
+    let version: Int
+}
+
+private struct HelperUninstallResponse: Codable {
+    let version: Int
+    let errorCode: String?
+    let errorMessage: String?
+}
+
 private let helperDumpRoute = XPCRoute
     .named("btm", "fetchDump", "v1")
     .withMessageType(HelperDumpRequest.self)
@@ -69,6 +80,11 @@ private let helperWriteRoute = XPCRoute
     .named("btm", "write", "v1")
     .withMessageType(HelperWriteRequest.self)
     .withReplyType(HelperWriteResponse.self)
+
+private let helperUninstallRoute = XPCRoute
+    .named("helper", "selfUninstall", "v1")
+    .withMessageType(HelperUninstallRequest.self)
+    .withReplyType(HelperUninstallResponse.self)
 
 private enum BTMWriteError: LocalizedError {
     case noStoreFiles
@@ -905,6 +921,58 @@ private func performWrite(_ request: HelperWriteRequest) -> HelperWriteResponse 
     }
 }
 
+private func scheduleSelfUninstall() {
+    DispatchQueue.global(qos: .utility).async {
+        usleep(80 * 1000)
+        do {
+            try performSelfUninstallImmediately()
+        } catch {
+            helperLog.error("Deferred self-uninstall failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+}
+
+private func performSelfUninstallImmediately() throws -> Never {
+    let helperPath = URL(fileURLWithPath: "/Library/PrivilegedHelperTools/\(helperBundleIdentifier)")
+    let launchDaemonPath = URL(fileURLWithPath: "/Library/LaunchDaemons/\(helperBundleIdentifier).plist")
+    let currentExecutable = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
+
+    guard currentExecutable.path == helperPath.path else {
+        throw NSError(
+            domain: helperBundleIdentifier,
+            code: 11,
+            userInfo: [NSLocalizedDescriptionKey: "uninstall_not_running_from_blessed_location"]
+        )
+    }
+
+    if FileManager.default.fileExists(atPath: launchDaemonPath.path) {
+        try FileManager.default.removeItem(at: launchDaemonPath)
+        helperLog.info("Removed launch daemon plist at \(launchDaemonPath.path, privacy: .public)")
+    }
+
+    if FileManager.default.fileExists(atPath: helperPath.path) {
+        try FileManager.default.removeItem(at: helperPath)
+        helperLog.info("Removed helper binary at \(helperPath.path, privacy: .public)")
+    }
+
+    helperLog.info("Self-uninstall completed; exiting helper process")
+    exit(0)
+}
+
+private func performSelfUninstall(_ request: HelperUninstallRequest) -> HelperUninstallResponse {
+    helperLog.info("Received self-uninstall request")
+    guard request.version == helperUninstallRouteVersion else {
+        return HelperUninstallResponse(
+            version: helperUninstallRouteVersion,
+            errorCode: "route_version_mismatch",
+            errorMessage: "route_version_mismatch"
+        )
+    }
+
+    scheduleSelfUninstall()
+    return HelperUninstallResponse(version: helperUninstallRouteVersion, errorCode: nil, errorMessage: nil)
+}
+
 private func currentHelperVersion() -> String {
     let info = Bundle.main.infoDictionary
     if let short = info?["CFBundleShortVersionString"] as? String, !short.isEmpty {
@@ -942,6 +1010,7 @@ do {
     server.registerRoute(helperDumpRoute, handler: fetchBTMDump)
     server.registerRoute(helperCapabilitiesRoute, handler: fetchCapabilities)
     server.registerRoute(helperWriteRoute, handler: performWrite)
+    server.registerRoute(helperUninstallRoute, handler: performSelfUninstall)
     server.setErrorHandler { _ in }
     helperLog.info("Helper server started")
     server.startAndBlock()

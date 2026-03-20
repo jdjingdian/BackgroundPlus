@@ -54,8 +54,9 @@
 
 "btm.settings.button" = "Settings";
 "btm.settings.title" = "Helper Setup";
-"btm.settings.nav.general" = "General";
+"btm.settings.nav.general" = "Service Management";
 "btm.settings.nav.about" = "About";
+"btm.settings.nav.permissions" = "Permissions";
 "btm.settings.helper_status" = "Helper Status";
 "btm.settings.managed_by" = "Managed by %@";
 "btm.settings.compatibility_status" = "Compatibility";
@@ -64,6 +65,11 @@
 "btm.settings.retry" = "Retry Install";
 "btm.settings.refresh_status" = "Refresh Status";
 "btm.settings.uninstall" = "Uninstall Helper";
+"btm.settings.uninstall.in_progress" = "Uninstalling helper...";
+"btm.settings.uninstall.confirm.title" = "Uninstall Helper";
+"btm.settings.uninstall.confirm.message" = "This will remove the privileged helper from this Mac. Continue?";
+"btm.settings.uninstall.confirm.action" = "Uninstall";
+"btm.settings.uninstall.confirm.cancel" = "Cancel";
 "btm.settings.close" = "Close";
 "btm.settings.uninstall.manual.title" = "Manual Helper Removal";
 "btm.settings.uninstall.manual.copy" = "Copy Command";
@@ -84,6 +90,14 @@
 "btm.settings.about.license" = "BackgroundPlus is open source under the Apache 2.0 license.";
 "btm.settings.about.copyright" = "Copyright © %d, Derek Jing";
 "btm.settings.about.homepage" = "Project Homepage";
+"btm.settings.permission.title" = "Permission Management";
+"btm.settings.permission.fda.description" = "Full Disk Access is required for helper read/write access to BTM stores.";
+"btm.settings.permission.fda.open_settings" = "Open System Settings";
+"btm.settings.permission.fda.ok" = "Full Disk Access is enabled.";
+"btm.settings.permission.fda.state.unknown" = "Full Disk Access status unknown";
+"btm.settings.permission.fda.state.enabled" = "Full Disk Access enabled";
+"btm.settings.permission.fda.state.disabled" = "Full Disk Access not enabled";
+"btm.settings.permission.fda.state.failed" = "Failed to detect Full Disk Access";
 
 "btm.helper.required.title" = "Helper Required";
 "btm.helper.required.body" = "To read real BTM data, install the privileged helper from Settings first.";
@@ -97,6 +111,9 @@
 "btm.helper.error.write_unsupported" = "Write operations are unavailable on this system. Read-only mode is enabled.";
 "btm.helper.error.toggle_unsupported" = "Toggle operations are unavailable in the current write adapter.";
 "btm.helper.error.install_failed" = "Helper install failed.";
+"btm.helper.error.uninstall_failed" = "Helper uninstall failed.";
+"btm.helper.error.uninstall_pending" = "Uninstall command sent. Please refresh in a moment.";
+"btm.helper.error.uninstall_unsupported" = "Helper uninstall is not supported by the installed helper version.";
 "btm.helper.error.authorization_denied" = "Authorization denied.";
 "btm.helper.error.signing_mismatch" = "Code signing mismatch. Verify app and helper signing.";
 "btm.helper.warning.version_mismatch.title" = "Helper Version Mismatch";

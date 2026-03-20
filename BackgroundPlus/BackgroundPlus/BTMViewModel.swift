@@ -41,6 +41,13 @@ enum ParseWarningBannerState: Equatable {
     case parseAndClassification
 }
 
+enum FDAPermissionState: Equatable {
+    case unknown
+    case enabled
+    case disabled
+    case detectionFailed
+}
+
 final class BTMViewModel: ObservableObject {
     @Published var entries: [BTMEntry] = []
     @Published private(set) var projectedEntries: BTMEntryProjection = .empty
@@ -59,6 +66,8 @@ final class BTMViewModel: ObservableObject {
     @Published var helperRecovered = false
     @Published var writeOperationsSupported = false
     @Published var toggleOperationsSupported = false
+    @Published var fdaPermissionState: FDAPermissionState = .unknown
+    @Published var isUninstallingHelper = false
     @Published var listSourceMethod: BTMListSourceMethod = .unknown
     @Published var selectedSidebarItem: BTMSidebarItem? = .loginItems {
         didSet {
@@ -213,6 +222,19 @@ final class BTMViewModel: ObservableObject {
         }
     }
 
+    var fdaPermissionStatusKey: String {
+        switch fdaPermissionState {
+        case .unknown:
+            return "btm.settings.permission.fda.state.unknown"
+        case .enabled:
+            return "btm.settings.permission.fda.state.enabled"
+        case .disabled:
+            return "btm.settings.permission.fda.state.disabled"
+        case .detectionFailed:
+            return "btm.settings.permission.fda.state.failed"
+        }
+    }
+
     var compatibilityWarningTitleKey: String {
         switch helperCompatibilityState {
         case .versionMismatch:
@@ -243,7 +265,14 @@ final class BTMViewModel: ObservableObject {
             helperRecovered = false
             writeOperationsSupported = false
             toggleOperationsSupported = false
+            fdaPermissionState = .unknown
         }
+    }
+
+    func refreshHelperStatusAndCapabilities(forceRefresh: Bool = true) {
+        refreshHelperState()
+        guard helperState == .installed else { return }
+        _ = evaluateCompatibility(forceRefresh: forceRefresh)
     }
 
     func installHelper() {
@@ -262,6 +291,42 @@ final class BTMViewModel: ObservableObject {
         } catch {
             helperState = .failed
             helperErrorMessage = error.localizedDescription
+        }
+    }
+
+    func uninstallHelper() {
+        guard helperState == .installed, !isUninstallingHelper else { return }
+        helperErrorMessage = ""
+        isUninstallingHelper = true
+        compatibilityValidator.invalidate()
+
+        Task(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            do {
+                try self.helperClient.performSelfUninstall()
+                let removed = await self.waitForHelperRemoval()
+                await MainActor.run {
+                    self.isUninstallingHelper = false
+                    self.refreshHelperStatusAndCapabilities(forceRefresh: true)
+                    if !removed {
+                        self.helperErrorMessage = String(
+                            localized: String.LocalizationValue("btm.helper.error.uninstall_pending")
+                        )
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    self.isUninstallingHelper = false
+                    self.refreshHelperStatusAndCapabilities(forceRefresh: true)
+                    if let key = (error as? LocalizedError)?.errorDescription, !key.isEmpty {
+                        self.helperErrorMessage = String(localized: String.LocalizationValue(key))
+                    } else {
+                        self.helperErrorMessage = String(
+                            localized: String.LocalizationValue("btm.helper.error.uninstall_failed")
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -421,6 +486,7 @@ final class BTMViewModel: ObservableObject {
             helperRecovered = wasIncompatible
             writeOperationsSupported = capabilities.supportsWriteOperations
             toggleOperationsSupported = capabilities.supportsWriteOperations && capabilities.writeSchemaVersion >= 2
+            fdaPermissionState = capabilities.supportsWriteOperations ? .enabled : .disabled
             if !capabilities.supportsWriteOperations {
                 errorKey = BTMCoreError.helperWriteUnsupported.errorDescription
             }
@@ -436,12 +502,15 @@ final class BTMViewModel: ObservableObject {
                     actualHelperVersion: actualHelperVersion
                 )
                 errorKey = BTMCoreError.helperVersionMismatch.errorDescription
+                fdaPermissionState = .unknown
             case .interfaceMismatch:
                 helperCompatibilityState = .capabilityReadFailed
                 errorKey = BTMCoreError.helperCapabilitiesUnavailable.errorDescription
+                fdaPermissionState = .detectionFailed
             case .capabilityReadFailed:
                 helperCompatibilityState = .capabilityReadFailed
                 errorKey = BTMCoreError.helperCapabilitiesUnavailable.errorDescription
+                fdaPermissionState = .detectionFailed
             }
             return false
         }
@@ -457,7 +526,19 @@ final class BTMViewModel: ObservableObject {
         listSourceMethod = .unknown
         writeOperationsSupported = false
         toggleOperationsSupported = false
+        fdaPermissionState = .unknown
         entryLoadingState = .requiresHelper
+    }
+
+    private func waitForHelperRemoval(maxAttempts: Int = 12, intervalNanoseconds: UInt64 = 250_000_000) async -> Bool {
+        for _ in 0..<maxAttempts {
+            try? await Task.sleep(nanoseconds: intervalNanoseconds)
+            let state = await MainActor.run { installManager.refreshState() }
+            if state != .installed {
+                return true
+            }
+        }
+        return false
     }
 
     private func inferredEnabledState(from disposition: String) -> Bool {

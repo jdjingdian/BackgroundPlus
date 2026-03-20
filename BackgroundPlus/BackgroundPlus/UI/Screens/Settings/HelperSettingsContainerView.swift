@@ -1,17 +1,24 @@
 import SwiftUI
 import AppKit
+import Combine
 
 struct HelperSettingsContainerView: View {
     @ObservedObject var viewModel: BTMViewModel
-    @State private var showManualUninstallAlert = false
+    @State private var showUninstallConfirmAlert = false
     private let settingsWidth: CGFloat = 560
     private let iconLength: CGFloat = 128
+    private let permissionRefreshTimer = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
 
     var body: some View {
         TabView {
             generalTabContent
                 .tabItem {
                     Label(localized("btm.settings.nav.general"), systemImage: "gear")
+                }
+
+            permissionTabContent
+                .tabItem {
+                    Label(localized("btm.settings.nav.permissions"), systemImage: "lock.shield")
                 }
 
             aboutTabContent
@@ -21,17 +28,22 @@ struct HelperSettingsContainerView: View {
         }
         .frame(width: settingsWidth)
         .padding(.top, 4)
-        .alert(localized("btm.settings.uninstall.manual.title"), isPresented: $showManualUninstallAlert) {
-            Button(localized("btm.settings.uninstall.manual.copy")) {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(manualUninstallCommand, forType: .string)
+        .alert(localized("btm.settings.uninstall.confirm.title"), isPresented: $showUninstallConfirmAlert) {
+            Button(localized("btm.settings.uninstall.confirm.action"), role: .destructive) {
+                viewModel.uninstallHelper()
             }
-            Button(localized("btm.settings.uninstall.manual.cancel"), role: .cancel) {}
+            Button(localized("btm.settings.uninstall.confirm.cancel"), role: .cancel) {}
         } message: {
-            Text(String(format: localized("btm.settings.uninstall.manual.message"), manualUninstallCommand))
+            Text(localized("btm.settings.uninstall.confirm.message"))
         }
         .onAppear {
-            viewModel.refreshHelperState()
+            viewModel.refreshHelperStatusAndCapabilities(forceRefresh: true)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            viewModel.refreshHelperStatusAndCapabilities(forceRefresh: true)
+        }
+        .onReceive(permissionRefreshTimer) { _ in
+            viewModel.refreshHelperStatusAndCapabilities(forceRefresh: true)
         }
     }
 
@@ -85,7 +97,7 @@ struct HelperSettingsContainerView: View {
 
             HStack(spacing: 10) {
                 Button(localized("btm.settings.refresh_status")) {
-                    viewModel.refreshHelperState()
+                    viewModel.refreshHelperStatusAndCapabilities(forceRefresh: true)
                 }
                 .buttonStyle(.bordered)
 
@@ -93,11 +105,59 @@ struct HelperSettingsContainerView: View {
 
                 if viewModel.helperState == .installed {
                     Button(localized("btm.settings.uninstall"), role: .destructive) {
-                        showManualUninstallAlert = true
+                        showUninstallConfirmAlert = true
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                    .disabled(viewModel.isUninstallingHelper)
                 }
             }
+
+            if viewModel.isUninstallingHelper {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text(localized("btm.settings.uninstall.in_progress"))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding()
+    }
+
+    private var permissionTabContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(localized("btm.settings.permission.title"))
+                    .font(.title3.bold())
+                Spacer()
+            }
+
+            HStack(spacing: 10) {
+                Image(systemName: fdaStatusIconName)
+                    .foregroundStyle(fdaStatusColor)
+                Text(localized(viewModel.fdaPermissionStatusKey))
+                    .font(.headline)
+            }
+
+            Text(localized("btm.settings.permission.fda.description"))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            if viewModel.fdaPermissionState == .disabled || viewModel.fdaPermissionState == .detectionFailed {
+                Button(localized("btm.settings.permission.fda.open_settings")) {
+                    openFullDiskAccessSettings()
+                }
+                .buttonStyle(.borderedProminent)
+            }
+
+            if viewModel.fdaPermissionState == .enabled {
+                Label(localized("btm.settings.permission.fda.ok"), systemImage: "checkmark.seal.fill")
+                    .foregroundStyle(.green)
+            }
+
+            Spacer(minLength: 0)
         }
         .padding()
     }
@@ -247,13 +307,53 @@ struct HelperSettingsContainerView: View {
         return String(format: localized("btm.settings.about.copyright"), year)
     }
 
-    private var manualUninstallCommand: String {
-        "sudo launchctl bootout system/\(helperBundleIdentifier) && sudo rm -f /Library/PrivilegedHelperTools/\(helperBundleIdentifier)"
+    private var fdaStatusIconName: String {
+        switch viewModel.fdaPermissionState {
+        case .enabled:
+            return "checkmark.circle.fill"
+        case .disabled:
+            return "exclamationmark.triangle.fill"
+        case .detectionFailed:
+            return "xmark.octagon.fill"
+        case .unknown:
+            return "questionmark.circle.fill"
+        }
+    }
+
+    private var fdaStatusColor: Color {
+        switch viewModel.fdaPermissionState {
+        case .enabled:
+            return .green
+        case .disabled:
+            return .orange
+        case .detectionFailed:
+            return .red
+        case .unknown:
+            return .gray
+        }
     }
 
     private func openProjectHomepage() {
         guard let url = URL(string: "https://github.com/jdjingdian/BackgroundPlus") else { return }
         NSWorkspace.shared.open(url)
+    }
+
+    private func openFullDiskAccessSettings() {
+        let candidates = [
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
+            "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_AllFiles"
+        ]
+
+        for raw in candidates {
+            guard let url = URL(string: raw) else { continue }
+            if NSWorkspace.shared.open(url) {
+                return
+            }
+        }
+
+        if let fallback = URL(string: "x-apple.systempreferences:com.apple.preference.security") {
+            _ = NSWorkspace.shared.open(fallback)
+        }
     }
 
 }

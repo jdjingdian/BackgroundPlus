@@ -54,8 +54,9 @@
 
 "btm.settings.button" = "设置";
 "btm.settings.title" = "Helper 安装";
-"btm.settings.nav.general" = "通用";
+"btm.settings.nav.general" = "服务管理";
 "btm.settings.nav.about" = "关于";
+"btm.settings.nav.permissions" = "权限管理";
 "btm.settings.helper_status" = "Helper 状态";
 "btm.settings.managed_by" = "由 %@ 管理";
 "btm.settings.compatibility_status" = "兼容性";
@@ -64,6 +65,11 @@
 "btm.settings.retry" = "重试安装";
 "btm.settings.refresh_status" = "刷新状态";
 "btm.settings.uninstall" = "卸载 Helper";
+"btm.settings.uninstall.in_progress" = "正在卸载 Helper...";
+"btm.settings.uninstall.confirm.title" = "卸载 Helper";
+"btm.settings.uninstall.confirm.message" = "此操作会从当前 Mac 移除特权 Helper，是否继续？";
+"btm.settings.uninstall.confirm.action" = "确认卸载";
+"btm.settings.uninstall.confirm.cancel" = "取消";
 "btm.settings.close" = "关闭";
 "btm.settings.uninstall.manual.title" = "手动卸载 Helper";
 "btm.settings.uninstall.manual.copy" = "复制命令";
@@ -84,6 +90,14 @@
 "btm.settings.about.license" = "BackgroundPlus 基于 Apache 2.0 协议开源。";
 "btm.settings.about.copyright" = "版权所有 © %d，Derek Jing";
 "btm.settings.about.homepage" = "项目主页";
+"btm.settings.permission.title" = "权限管理";
+"btm.settings.permission.fda.description" = "Helper 读写 BTM 存储依赖“完全磁盘访问”权限。";
+"btm.settings.permission.fda.open_settings" = "前往系统设置";
+"btm.settings.permission.fda.ok" = "已开启完全磁盘访问权限。";
+"btm.settings.permission.fda.state.unknown" = "完全磁盘访问状态未知";
+"btm.settings.permission.fda.state.enabled" = "已开启完全磁盘访问";
+"btm.settings.permission.fda.state.disabled" = "未开启完全磁盘访问";
+"btm.settings.permission.fda.state.failed" = "完全磁盘访问检测失败";
 
 "btm.helper.required.title" = "需要安装 Helper";
 "btm.helper.required.body" = "要读取真实 BTM 数据，请先在设置中安装特权 Helper。";
@@ -97,6 +111,9 @@
 "btm.helper.error.write_unsupported" = "当前系统暂不支持写入操作，已切换为只读模式。";
 "btm.helper.error.toggle_unsupported" = "当前写入适配器暂不支持开关操作。";
 "btm.helper.error.install_failed" = "Helper 安装失败。";
+"btm.helper.error.uninstall_failed" = "Helper 卸载失败。";
+"btm.helper.error.uninstall_pending" = "已发送卸载请求，请稍后刷新状态。";
+"btm.helper.error.uninstall_unsupported" = "当前已安装的 Helper 版本不支持自卸载。";
 "btm.helper.error.authorization_denied" = "授权被拒绝。";
 "btm.helper.error.signing_mismatch" = "代码签名不匹配，请检查 App 与 Helper 签名配置。";
 "btm.helper.warning.version_mismatch.title" = "Helper 版本不匹配";

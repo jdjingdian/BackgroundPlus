@@ -182,6 +182,7 @@ enum BTMCoreError: LocalizedError {
     case helperCapabilitiesUnavailable
     case helperVersionMismatch
     case helperWriteUnsupported
+    case helperUninstallUnsupported
     case helperExecutionFailed(String)
     case permissionDenied
 
@@ -205,6 +206,8 @@ enum BTMCoreError: LocalizedError {
             return "btm.helper.error.version_mismatch"
         case .helperWriteUnsupported:
             return "btm.helper.error.write_unsupported"
+        case .helperUninstallUnsupported:
+            return "btm.helper.error.uninstall_unsupported"
         case let .helperExecutionFailed(message):
             return message
         case .permissionDenied:

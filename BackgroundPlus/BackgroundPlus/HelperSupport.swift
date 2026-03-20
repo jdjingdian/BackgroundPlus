@@ -7,6 +7,7 @@ let helperBundleIdentifier = "cn.magicdian.BackgroundPlus.helper"
 let helperProtocolVersion = 1
 let helperCapabilitiesRouteVersion = 1
 let helperWriteRouteVersion = 1
+let helperUninstallRouteVersion = 1
 private let helperClientLog = Logger(subsystem: "cn.magicdian.BackgroundPlus", category: "HelperClient")
 
 enum HelperInstallState: String, Codable {
@@ -100,6 +101,16 @@ struct HelperWriteResponse: Codable {
     let errorMessage: String?
 }
 
+struct HelperUninstallRequest: Codable {
+    let version: Int
+}
+
+struct HelperUninstallResponse: Codable {
+    let version: Int
+    let errorCode: String?
+    let errorMessage: String?
+}
+
 enum HelperCompatibilityIssue: Equatable {
     case versionMismatch(expectedAppVersion: String, actualHelperVersion: String)
     case interfaceMismatch(expectedInterfaceVersion: Int, actualInterfaceVersion: Int)
@@ -126,10 +137,16 @@ let helperWriteRoute = XPCRoute
     .withMessageType(HelperWriteRequest.self)
     .withReplyType(HelperWriteResponse.self)
 
+let helperUninstallRoute = XPCRoute
+    .named("helper", "selfUninstall", "v1")
+    .withMessageType(HelperUninstallRequest.self)
+    .withReplyType(HelperUninstallResponse.self)
+
 protocol PrivilegedHelperClient {
     func fetchBTMDump() throws -> DumpFetchResult
     func fetchHelperCapabilities() throws -> HelperCapabilities
     func performWrite(_ request: HelperWriteRequest) throws
+    func performSelfUninstall() throws
 }
 
 struct XPCPrivilegedHelperClient: PrivilegedHelperClient {
@@ -279,6 +296,54 @@ struct XPCPrivilegedHelperClient: PrivilegedHelperClient {
                 throw BTMCoreError.helperWriteUnsupported
             }
             throw BTMCoreError.helperExecutionFailed(decoded.errorMessage ?? code)
+        }
+    }
+
+    func performSelfUninstall() throws {
+        helperClientLog.info("Starting helper self-uninstall request")
+        let client = XPCClient.forMachService(named: helperBundleIdentifier)
+        let requestPayload = HelperUninstallRequest(version: helperUninstallRouteVersion)
+
+        let semaphore = DispatchSemaphore(value: 0)
+        var reply: Result<HelperUninstallResponse, XPCError>?
+        client.sendMessage(requestPayload, to: helperUninstallRoute) { response in
+            reply = response
+            semaphore.signal()
+        }
+
+        if semaphore.wait(timeout: .now() + 20) == .timedOut {
+            helperClientLog.error("Helper self-uninstall request timed out")
+            throw BTMCoreError.helperCommunicationFailed
+        }
+
+        guard let reply else {
+            throw BTMCoreError.helperCommunicationFailed
+        }
+
+        let decoded: HelperUninstallResponse
+        switch reply {
+        case let .success(value):
+            decoded = value
+        case .failure:
+            helperClientLog.error("Helper self-uninstall request failed at transport layer")
+            throw BTMCoreError.helperCommunicationFailed
+        }
+
+        guard decoded.version == helperUninstallRouteVersion else {
+            helperClientLog.error("Helper self-uninstall route mismatch: expected=\(helperUninstallRouteVersion) actual=\(decoded.version)")
+            throw BTMCoreError.helperProtocolMismatch
+        }
+
+        if let code = decoded.errorCode {
+            helperClientLog.error("Helper self-uninstall returned error: code=\(code, privacy: .public) message=\(decoded.errorMessage ?? "", privacy: .public)")
+            switch code {
+            case "permission_denied":
+                throw BTMCoreError.permissionDenied
+            case "uninstall_not_supported":
+                throw BTMCoreError.helperUninstallUnsupported
+            default:
+                throw BTMCoreError.helperExecutionFailed(decoded.errorMessage ?? code)
+            }
         }
     }
 }
