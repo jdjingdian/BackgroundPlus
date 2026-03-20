@@ -106,6 +106,40 @@ struct BackgroundPlusTests {
         #expect(output.unknownCategoryCount == 1)
     }
 
+    @Test func parseWarningBannerStateAggregatesParseAndClassificationFlags() {
+        let viewModel = BTMViewModel(
+            manager: BTMManager(
+                source: FixtureDataSource(),
+                database: InMemoryDatabaseAdapter(seed: []),
+                backupManager: BackupManager(base: URL(fileURLWithPath: NSTemporaryDirectory()))
+            ),
+            helperClient: MockHelperClient(
+                dump: BTMFixture.sampleDump,
+                capabilities: HelperCapabilities(helperVersion: "1.0.0", interfaceVersion: 1)
+            )
+        )
+
+        viewModel.parseIncomplete = false
+        viewModel.classificationIncomplete = false
+        #expect(viewModel.parseWarningBannerState == .none)
+        #expect(viewModel.parseWarningBannerMessageKey == nil)
+
+        viewModel.parseIncomplete = true
+        viewModel.classificationIncomplete = false
+        #expect(viewModel.parseWarningBannerState == .parseOnly)
+        #expect(viewModel.parseWarningBannerMessageKey == "btm.error.parse_incomplete")
+
+        viewModel.parseIncomplete = false
+        viewModel.classificationIncomplete = true
+        #expect(viewModel.parseWarningBannerState == .classificationOnly)
+        #expect(viewModel.parseWarningBannerMessageKey == "btm.error.classification_incomplete")
+
+        viewModel.parseIncomplete = true
+        viewModel.classificationIncomplete = true
+        #expect(viewModel.parseWarningBannerState == .parseAndClassification)
+        #expect(viewModel.parseWarningBannerMessageKey == "btm.error.parse_and_classification_incomplete")
+    }
+
     @Test func projectorKeepsUnknownEntriesOutOfBackgroundListAndPreservesAllItems() {
         let entries: [BTMEntry] = [
             BTMEntry(

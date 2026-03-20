@@ -102,6 +102,7 @@
 "btm.error.backup_failed" = "Backup failed. Write operation was blocked.";
 "btm.error.parse_incomplete" = "Parsing incomplete. Results may be inaccurate.";
 "btm.error.classification_incomplete" = "Classification incomplete. Uncategorized entries are shown in Full Dump Data.";
+"btm.error.parse_and_classification_incomplete" = "Parsing and classification are incomplete. Results may be inaccurate; uncategorized entries are shown in Full Dump Data.";
 "btm.error.permission_denied" = "Insufficient permission to perform this action.";
 "btm.error.execution_failed" = "Execution failed: %@";
 "btm.error.unknown" = "An unknown error occurred";

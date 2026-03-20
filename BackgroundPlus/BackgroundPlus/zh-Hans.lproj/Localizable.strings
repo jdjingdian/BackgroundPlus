@@ -102,6 +102,7 @@
 "btm.error.backup_failed" = "备份失败，已阻止写入";
 "btm.error.parse_incomplete" = "解析不完整，结果可能不准确";
 "btm.error.classification_incomplete" = "分类不完整，未能归类的条目已展示在“完整 Dump 数据”中";
+"btm.error.parse_and_classification_incomplete" = "解析与分类均不完整，结果可能不准确；未能归类的条目已展示在“完整 Dump 数据”中";
 "btm.error.permission_denied" = "权限不足，无法执行该操作";
 "btm.error.execution_failed" = "执行失败：%@";
 "btm.error.unknown" = "发生未知错误";

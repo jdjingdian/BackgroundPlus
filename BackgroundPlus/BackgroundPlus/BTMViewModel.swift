@@ -34,6 +34,13 @@ enum BTMSidebarItem: Hashable {
     case fullDumpItems
 }
 
+enum ParseWarningBannerState: Equatable {
+    case none
+    case parseOnly
+    case classificationOnly
+    case parseAndClassification
+}
+
 final class BTMViewModel: ObservableObject {
     @Published var entries: [BTMEntry] = []
     @Published private(set) var projectedEntries: BTMEntryProjection = .empty
@@ -128,6 +135,32 @@ final class BTMViewModel: ObservableObject {
 
     var shouldShowInstallPrompt: Bool {
         helperState != .installed || helperCompatibilityState.requiresReinstall
+    }
+
+    var parseWarningBannerState: ParseWarningBannerState {
+        switch (parseIncomplete, classificationIncomplete) {
+        case (true, true):
+            return .parseAndClassification
+        case (true, false):
+            return .parseOnly
+        case (false, true):
+            return .classificationOnly
+        case (false, false):
+            return .none
+        }
+    }
+
+    var parseWarningBannerMessageKey: String? {
+        switch parseWarningBannerState {
+        case .none:
+            return nil
+        case .parseOnly:
+            return "btm.error.parse_incomplete"
+        case .classificationOnly:
+            return "btm.error.classification_incomplete"
+        case .parseAndClassification:
+            return "btm.error.parse_and_classification_incomplete"
+        }
     }
 
     var compatibilityStatusKey: String {

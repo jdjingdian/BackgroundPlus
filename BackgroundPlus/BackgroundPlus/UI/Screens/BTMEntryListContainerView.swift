@@ -14,13 +14,10 @@ struct BTMEntryListContainerView: View {
             } else {
                 ScrollViewReader { proxy in
                     List {
-                        if viewModel.parseIncomplete {
-                            Text("btm.error.parse_incomplete")
-                                .foregroundStyle(.orange)
-                        }
-                        if viewModel.classificationIncomplete {
-                            Text("btm.error.classification_incomplete")
-                                .foregroundStyle(.orange)
+                        if let warningKey = viewModel.parseWarningBannerMessageKey {
+                            StatusBanner(style: .warning, message: LocalizedStringKey(warningKey))
+                                .listRowInsets(EdgeInsets())
+                                .listRowSeparator(.hidden)
                         }
 
                         if let errorKey = viewModel.errorKey {
@@ -83,5 +80,71 @@ struct BTMEntryListContainerView: View {
                 Text(localized(viewModel.customDetailUnavailableMessageKey ?? "btm.custom_detail.unavailable"))
             }
         )
+    }
+}
+
+enum StatusBannerStyle {
+    case warning
+    case info
+
+    var backgroundColor: Color {
+        switch self {
+        case .warning:
+            return .orange.opacity(0.12)
+        case .info:
+            return .blue.opacity(0.12)
+        }
+    }
+
+    var iconName: String {
+        switch self {
+        case .warning:
+            return "exclamationmark.triangle.fill"
+        case .info:
+            return "info.circle.fill"
+        }
+    }
+
+    var iconColor: Color {
+        switch self {
+        case .warning:
+            return .orange
+        case .info:
+            return .blue
+        }
+    }
+}
+
+struct StatusBanner<ActionButton: View>: View {
+    let style: StatusBannerStyle
+    let message: LocalizedStringKey
+    @ViewBuilder let actionButton: () -> ActionButton
+
+    init(
+        style: StatusBannerStyle,
+        message: LocalizedStringKey,
+        @ViewBuilder actionButton: @escaping () -> ActionButton = { EmptyView() }
+    ) {
+        self.style = style
+        self.message = message
+        self.actionButton = actionButton
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: style.iconName)
+                    .foregroundStyle(style.iconColor)
+                Text(message)
+                    .font(.callout)
+                Spacer(minLength: 8)
+                actionButton()
+                    .font(.callout)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(style.backgroundColor)
+            Divider()
+        }
     }
 }
