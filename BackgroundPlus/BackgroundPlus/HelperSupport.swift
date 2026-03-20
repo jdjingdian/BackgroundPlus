@@ -6,6 +6,7 @@ import os
 let helperBundleIdentifier = "cn.magicdian.BackgroundPlus.helper"
 let helperProtocolVersion = 1
 let helperCapabilitiesRouteVersion = 1
+let helperWriteRouteVersion = 1
 private let helperClientLog = Logger(subsystem: "cn.magicdian.BackgroundPlus", category: "HelperClient")
 
 enum HelperInstallState: String, Codable {
@@ -46,6 +47,7 @@ struct HelperCapabilitiesRequest: Codable {
 struct HelperDumpResponse: Codable {
     let version: Int
     let dump: String
+    let sourceMethodRawValue: String?
     let errorCode: String?
     let errorMessage: String?
 }
@@ -54,6 +56,8 @@ struct HelperCapabilitiesResponse: Codable {
     let version: Int
     let helperVersion: String
     let interfaceVersion: Int
+    let supportsWriteOperations: Bool
+    let writeSchemaVersion: Int
     let errorCode: String?
     let errorMessage: String?
 }
@@ -61,6 +65,39 @@ struct HelperCapabilitiesResponse: Codable {
 struct HelperCapabilities: Equatable {
     let helperVersion: String
     let interfaceVersion: Int
+    let supportsWriteOperations: Bool
+    let writeSchemaVersion: Int
+
+    init(
+        helperVersion: String,
+        interfaceVersion: Int,
+        supportsWriteOperations: Bool = false,
+        writeSchemaVersion: Int = 0
+    ) {
+        self.helperVersion = helperVersion
+        self.interfaceVersion = interfaceVersion
+        self.supportsWriteOperations = supportsWriteOperations
+        self.writeSchemaVersion = writeSchemaVersion
+    }
+}
+
+enum HelperWriteOperation: String, Codable {
+    case toggle
+    case delete
+}
+
+struct HelperWriteRequest: Codable {
+    let version: Int
+    let operation: HelperWriteOperation
+    let identifier: String
+    let modeRawValue: String?
+    let enabled: Bool?
+}
+
+struct HelperWriteResponse: Codable {
+    let version: Int
+    let errorCode: String?
+    let errorMessage: String?
 }
 
 enum HelperCompatibilityIssue: Equatable {
@@ -84,13 +121,19 @@ let helperCapabilitiesRoute = XPCRoute
     .withMessageType(HelperCapabilitiesRequest.self)
     .withReplyType(HelperCapabilitiesResponse.self)
 
+let helperWriteRoute = XPCRoute
+    .named("btm", "write", "v1")
+    .withMessageType(HelperWriteRequest.self)
+    .withReplyType(HelperWriteResponse.self)
+
 protocol PrivilegedHelperClient {
-    func fetchBTMDump() throws -> String
+    func fetchBTMDump() throws -> DumpFetchResult
     func fetchHelperCapabilities() throws -> HelperCapabilities
+    func performWrite(_ request: HelperWriteRequest) throws
 }
 
 struct XPCPrivilegedHelperClient: PrivilegedHelperClient {
-    func fetchBTMDump() throws -> String {
+    func fetchBTMDump() throws -> DumpFetchResult {
         helperClientLog.info("Starting helper dump request")
         let client = XPCClient.forMachService(named: helperBundleIdentifier)
         let request = HelperDumpRequest(version: helperProtocolVersion)
@@ -131,8 +174,9 @@ struct XPCPrivilegedHelperClient: PrivilegedHelperClient {
             }
             throw BTMCoreError.helperExecutionFailed(decoded.errorMessage ?? code)
         }
-        helperClientLog.info("Helper dump request succeeded, bytes=\(decoded.dump.utf8.count)")
-        return decoded.dump
+        let sourceMethod = BTMListSourceMethod(rawValue: decoded.sourceMethodRawValue ?? "") ?? .unknown
+        helperClientLog.info("Helper dump request succeeded, bytes=\(decoded.dump.utf8.count) source=\(sourceMethod.rawValue, privacy: .public)")
+        return DumpFetchResult(dump: decoded.dump, sourceMethod: sourceMethod)
     }
 
     func fetchHelperCapabilities() throws -> HelperCapabilities {
@@ -177,10 +221,65 @@ struct XPCPrivilegedHelperClient: PrivilegedHelperClient {
 
         let capabilities = HelperCapabilities(
             helperVersion: decoded.helperVersion,
-            interfaceVersion: decoded.interfaceVersion
+            interfaceVersion: decoded.interfaceVersion,
+            supportsWriteOperations: decoded.supportsWriteOperations,
+            writeSchemaVersion: decoded.writeSchemaVersion
         )
         helperClientLog.info("Helper capabilities request succeeded, helperVersion=\(capabilities.helperVersion, privacy: .public) interfaceVersion=\(capabilities.interfaceVersion)")
         return capabilities
+    }
+
+    func performWrite(_ request: HelperWriteRequest) throws {
+        helperClientLog.info("Starting helper write request op=\(request.operation.rawValue, privacy: .public)")
+        let client = XPCClient.forMachService(named: helperBundleIdentifier)
+        let requestPayload = HelperWriteRequest(
+            version: helperWriteRouteVersion,
+            operation: request.operation,
+            identifier: request.identifier,
+            modeRawValue: request.modeRawValue,
+            enabled: request.enabled
+        )
+
+        let semaphore = DispatchSemaphore(value: 0)
+        var reply: Result<HelperWriteResponse, XPCError>?
+        client.sendMessage(requestPayload, to: helperWriteRoute) { response in
+            reply = response
+            semaphore.signal()
+        }
+
+        if semaphore.wait(timeout: .now() + 20) == .timedOut {
+            helperClientLog.error("Helper write request timed out")
+            throw BTMCoreError.helperCommunicationFailed
+        }
+
+        guard let reply else {
+            throw BTMCoreError.helperCommunicationFailed
+        }
+
+        let decoded: HelperWriteResponse
+        switch reply {
+        case let .success(value):
+            decoded = value
+        case .failure:
+            helperClientLog.error("Helper write request failed at transport layer")
+            throw BTMCoreError.helperCommunicationFailed
+        }
+
+        guard decoded.version == helperWriteRouteVersion else {
+            helperClientLog.error("Helper write route mismatch: expected=\(helperWriteRouteVersion) actual=\(decoded.version)")
+            throw BTMCoreError.helperProtocolMismatch
+        }
+
+        if let code = decoded.errorCode {
+            helperClientLog.error("Helper write returned error: code=\(code, privacy: .public) message=\(decoded.errorMessage ?? "", privacy: .public)")
+            if code == "permission_denied" {
+                throw BTMCoreError.permissionDenied
+            }
+            if code == "write_not_supported" {
+                throw BTMCoreError.helperWriteUnsupported
+            }
+            throw BTMCoreError.helperExecutionFailed(decoded.errorMessage ?? code)
+        }
     }
 }
 

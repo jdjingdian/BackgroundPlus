@@ -6,6 +6,9 @@
 "btm.list.empty.full_dump_items" = "当前没有完整 Dump 条目";
 "btm.list.refresh" = "刷新";
 "btm.list.state.loading" = "正在加载 BTM 数据...";
+"btm.list.source.btm_file" = "列表来源：直接解析 BTM 文件";
+"btm.list.source.sfltool" = "列表来源：sfltool dumpbtm（回退）";
+"btm.list.source.fixture" = "列表来源：测试样例数据";
 "btm.list.open_custom_detail" = "打开定制功能详情";
 "btm.list.toggle.accessibility.label" = "切换 %@ 的启用状态";
 "btm.list.toggle.accessibility.value.on" = "已启用";
@@ -91,6 +94,8 @@
 "btm.helper.error.protocol_mismatch" = "Helper 协议不匹配，请重新安装。";
 "btm.helper.error.version_mismatch" = "Helper 版本不匹配，请重新安装。";
 "btm.helper.error.capabilities_unavailable" = "无法读取 Helper 能力信息，请重新安装。";
+"btm.helper.error.write_unsupported" = "当前系统暂不支持写入操作，已切换为只读模式。";
+"btm.helper.error.toggle_unsupported" = "当前写入适配器暂不支持开关操作。";
 "btm.helper.error.install_failed" = "Helper 安装失败。";
 "btm.helper.error.authorization_denied" = "授权被拒绝。";
 "btm.helper.error.signing_mismatch" = "代码签名不匹配，请检查 App 与 Helper 签名配置。";

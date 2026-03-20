@@ -6,6 +6,9 @@
 "btm.list.empty.full_dump_items" = "No dump entries found";
 "btm.list.refresh" = "Refresh";
 "btm.list.state.loading" = "Loading BTM data...";
+"btm.list.source.btm_file" = "List source: direct BTM file parsing";
+"btm.list.source.sfltool" = "List source: sfltool dumpbtm (fallback)";
+"btm.list.source.fixture" = "List source: test fixture";
 "btm.list.open_custom_detail" = "Open Custom Detail";
 "btm.list.toggle.accessibility.label" = "Toggle enable state for %@";
 "btm.list.toggle.accessibility.value.on" = "Enabled";
@@ -91,6 +94,8 @@
 "btm.helper.error.protocol_mismatch" = "Helper protocol mismatch. Please reinstall helper.";
 "btm.helper.error.version_mismatch" = "Helper version mismatch. Please reinstall helper.";
 "btm.helper.error.capabilities_unavailable" = "Cannot read helper capabilities. Please reinstall helper.";
+"btm.helper.error.write_unsupported" = "Write operations are unavailable on this system. Read-only mode is enabled.";
+"btm.helper.error.toggle_unsupported" = "Toggle operations are unavailable in the current write adapter.";
 "btm.helper.error.install_failed" = "Helper install failed.";
 "btm.helper.error.authorization_denied" = "Authorization denied.";
 "btm.helper.error.signing_mismatch" = "Code signing mismatch. Verify app and helper signing.";

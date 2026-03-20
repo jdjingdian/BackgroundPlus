@@ -57,6 +57,9 @@ final class BTMViewModel: ObservableObject {
     @Published var entryLoadingState: EntryLoadingState = .idle
     @Published var helperCompatibilityState: HelperCompatibilityState = .unknown
     @Published var helperRecovered = false
+    @Published var writeOperationsSupported = false
+    @Published var toggleOperationsSupported = false
+    @Published var listSourceMethod: BTMListSourceMethod = .unknown
     @Published var selectedSidebarItem: BTMSidebarItem? = .loginItems {
         didSet {
             syncSelectionForSidebarChange()
@@ -69,6 +72,7 @@ final class BTMViewModel: ObservableObject {
     private let manager: BTMManager
     private let installManager: HelperInstallManager
     private let compatibilityValidator: HelperCompatibilityValidator
+    private let helperClient: PrivilegedHelperClient
 
     init(
         manager: BTMManager? = nil,
@@ -76,6 +80,7 @@ final class BTMViewModel: ObservableObject {
         helperClient: PrivilegedHelperClient = XPCPrivilegedHelperClient(),
         compatibilityValidator: HelperCompatibilityValidator? = nil
     ) {
+        self.helperClient = helperClient
         self.manager = manager ?? BTMViewModel.defaultManager(helperClient: helperClient)
         self.installManager = installManager
         self.compatibilityValidator = compatibilityValidator ?? HelperCompatibilityValidator(helperClient: helperClient)
@@ -92,12 +97,18 @@ final class BTMViewModel: ObservableObject {
         }
         return BTMManager(
             source: source,
-            database: InMemoryDatabaseAdapter(seed: [
-                "2.cn.magicdian.staticrouter",
-                "16.cn.magicdian.staticrouter.service"
-            ]),
+            database: useFixture
+                ? InMemoryDatabaseAdapter(seed: [
+                    "2.cn.magicdian.staticrouter",
+                    "16.cn.magicdian.staticrouter.service"
+                ])
+                : HelperWriteDatabaseAdapter(helperClient: helperClient),
             backupManager: BackupManager()
         )
+    }
+
+    var isReadOnlyMode: Bool {
+        helperState == .installed && !toggleOperationsSupported
     }
 
     var selectedEntry: BTMEntry? {
@@ -135,6 +146,32 @@ final class BTMViewModel: ObservableObject {
 
     var shouldShowInstallPrompt: Bool {
         helperState != .installed || helperCompatibilityState.requiresReinstall
+    }
+
+    var readOnlyBannerMessageKey: String? {
+        if helperState != .installed {
+            return nil
+        }
+        if !writeOperationsSupported {
+            return "btm.helper.error.write_unsupported"
+        }
+        if !toggleOperationsSupported {
+            return "btm.helper.error.toggle_unsupported"
+        }
+        return nil
+    }
+
+    var listSourceBannerMessageKey: String? {
+        switch listSourceMethod {
+        case .btmFile:
+            return "btm.list.source.btm_file"
+        case .sfltool:
+            return "btm.list.source.sfltool"
+        case .fixture:
+            return "btm.list.source.fixture"
+        case .unknown:
+            return nil
+        }
     }
 
     var parseWarningBannerState: ParseWarningBannerState {
@@ -204,6 +241,8 @@ final class BTMViewModel: ObservableObject {
             compatibilityValidator.invalidate()
             helperCompatibilityState = .unknown
             helperRecovered = false
+            writeOperationsSupported = false
+            toggleOperationsSupported = false
         }
     }
 
@@ -247,6 +286,7 @@ final class BTMViewModel: ObservableObject {
                 guard let self else { return }
                 self.entries = result.entries
                 self.projectedEntries = result.projection
+                self.listSourceMethod = result.sourceMethod
                 self.parseIncomplete = result.parseIncomplete
                 self.classificationIncomplete = result.unknownCategoryCount > 0
                 self.applyUITestOverrides()
@@ -266,11 +306,12 @@ final class BTMViewModel: ObservableObject {
                     self.errorKey = key
                     self.entryLoadingState = .error(key)
                 } else {
-                    self.errorKey = "btm.error.unknown"
-                    self.entryLoadingState = .error("btm.error.unknown")
-                }
+                self.errorKey = "btm.error.unknown"
+                self.entryLoadingState = .error("btm.error.unknown")
+                self.listSourceMethod = .unknown
             }
         }
+    }
     }
 
     func planning(for entry: BTMEntry) -> (DeletePlan, RiskLevel, ConfirmationLevel) {
@@ -283,12 +324,17 @@ final class BTMViewModel: ObservableObject {
             errorKey = BTMCoreError.helperVersionMismatch.errorDescription
             return
         }
+        guard writeOperationsSupported else {
+            errorKey = BTMCoreError.helperWriteUnsupported.errorDescription
+            return
+        }
         let (plan, risk, confirmation) = planning(for: entry)
         let dbFiles: [URL] = []
         result = manager.execute(plan: plan, target: entry, risk: risk, confirmation: confirmation, sourceFilesForBackup: dbFiles)
         if let result {
             history.insert(result, at: 0)
         }
+        load()
     }
 
     func openBackupFolder() {
@@ -307,8 +353,43 @@ final class BTMViewModel: ObservableObject {
     }
 
     func setEnabledState(_ isEnabled: Bool, for entry: BTMEntry) {
+        guard toggleOperationsSupported else {
+            errorKey = "btm.helper.error.toggle_unsupported"
+            return
+        }
+
+        let previous = enabledState(for: entry)
         entryEnabledOverrides[entry.id] = isEnabled
         selectedEntryID = entry.id
+
+        let request = HelperWriteRequest(
+            version: helperWriteRouteVersion,
+            operation: .toggle,
+            identifier: entry.identifier,
+            modeRawValue: nil,
+            enabled: isEnabled
+        )
+
+        Task(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            do {
+                try self.helperClient.performWrite(request)
+                await MainActor.run {
+                    self.errorKey = nil
+                    self.load()
+                }
+            } catch let error as BTMCoreError {
+                await MainActor.run {
+                    self.entryEnabledOverrides[entry.id] = previous
+                    self.errorKey = error.errorDescription
+                }
+            } catch {
+                await MainActor.run {
+                    self.entryEnabledOverrides[entry.id] = previous
+                    self.errorKey = BTMCoreError.helperCommunicationFailed.errorDescription
+                }
+            }
+        }
     }
 
     func openCustomDetail(for entry: BTMEntry) {
@@ -338,9 +419,16 @@ final class BTMViewModel: ObservableObject {
         case let .compatible(capabilities):
             helperCompatibilityState = .compatible(helperVersion: capabilities.helperVersion)
             helperRecovered = wasIncompatible
+            writeOperationsSupported = capabilities.supportsWriteOperations
+            toggleOperationsSupported = capabilities.supportsWriteOperations && capabilities.writeSchemaVersion >= 2
+            if !capabilities.supportsWriteOperations {
+                errorKey = BTMCoreError.helperWriteUnsupported.errorDescription
+            }
             return true
         case let .incompatible(issue):
             helperRecovered = false
+            writeOperationsSupported = false
+            toggleOperationsSupported = false
             switch issue {
             case let .versionMismatch(expectedAppVersion, actualHelperVersion):
                 helperCompatibilityState = .versionMismatch(
@@ -366,6 +454,9 @@ final class BTMViewModel: ObservableObject {
         customDetailEntryID = nil
         parseIncomplete = false
         classificationIncomplete = false
+        listSourceMethod = .unknown
+        writeOperationsSupported = false
+        toggleOperationsSupported = false
         entryLoadingState = .requiresHelper
     }
 

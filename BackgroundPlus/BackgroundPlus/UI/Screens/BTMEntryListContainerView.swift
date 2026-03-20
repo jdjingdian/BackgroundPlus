@@ -20,6 +20,18 @@ struct BTMEntryListContainerView: View {
                                 .listRowSeparator(.hidden)
                         }
 
+                        if let sourceKey = viewModel.listSourceBannerMessageKey {
+                            StatusBanner(style: .info, message: LocalizedStringKey(sourceKey))
+                                .listRowInsets(EdgeInsets())
+                                .listRowSeparator(.hidden)
+                        }
+
+                        if let readOnlyKey = viewModel.readOnlyBannerMessageKey {
+                            StatusBanner(style: .info, message: LocalizedStringKey(readOnlyKey))
+                                .listRowInsets(EdgeInsets())
+                                .listRowSeparator(.hidden)
+                        }
+
                         if let errorKey = viewModel.errorKey {
                             Text(localized(errorKey))
                                 .foregroundStyle(.red)
@@ -29,6 +41,7 @@ struct BTMEntryListContainerView: View {
                             BTMEntryListRowView(
                                 entry: entry,
                                 isEnabled: viewModel.enabledState(for: entry),
+                                isToggleDisabled: viewModel.isReadOnlyMode,
                                 canOpenCustomDetail: viewModel.canOpenCustomDetail(for: entry),
                                 onToggle: { isOn in
                                     viewModel.setEnabledState(isOn, for: entry)

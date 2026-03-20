@@ -83,6 +83,7 @@ struct BackgroundPlusTests {
         #expect(BTMCoreError.helperProtocolMismatch.errorDescription == "btm.helper.error.protocol_mismatch")
         #expect(BTMCoreError.helperVersionMismatch.errorDescription == "btm.helper.error.version_mismatch")
         #expect(BTMCoreError.helperCapabilitiesUnavailable.errorDescription == "btm.helper.error.capabilities_unavailable")
+        #expect(BTMCoreError.helperWriteUnsupported.errorDescription == "btm.helper.error.write_unsupported")
         #expect(BTMCoreError.permissionDenied.errorDescription == "btm.error.permission_denied")
     }
 
@@ -293,6 +294,155 @@ struct BackgroundPlusTests {
         #expect(validator.validate(forceRefresh: true) == .compatible(HelperCapabilities(helperVersion: "1.0.0", interfaceVersion: 1)))
     }
 
+    @Test func readOnlyModeRequiresInstalledHelperAndUnsupportedWrite() {
+        let viewModel = BTMViewModel(
+            manager: BTMManager(
+                source: FixtureDataSource(),
+                database: InMemoryDatabaseAdapter(seed: []),
+                backupManager: BackupManager(base: URL(fileURLWithPath: NSTemporaryDirectory()))
+            ),
+            helperClient: MockHelperClient(
+                dump: BTMFixture.sampleDump,
+                capabilities: HelperCapabilities(helperVersion: "1.0.0", interfaceVersion: 1)
+            )
+        )
+
+        viewModel.helperState = .installed
+        viewModel.writeOperationsSupported = false
+        viewModel.toggleOperationsSupported = false
+        #expect(viewModel.isReadOnlyMode)
+        #expect(viewModel.readOnlyBannerMessageKey == "btm.helper.error.write_unsupported")
+
+        viewModel.writeOperationsSupported = true
+        viewModel.toggleOperationsSupported = false
+        #expect(viewModel.isReadOnlyMode)
+        #expect(viewModel.readOnlyBannerMessageKey == "btm.helper.error.toggle_unsupported")
+
+        viewModel.toggleOperationsSupported = true
+        #expect(!viewModel.isReadOnlyMode)
+        #expect(viewModel.readOnlyBannerMessageKey == nil)
+    }
+
+    @Test func setEnabledStateBlockedInReadOnlyMode() {
+        let viewModel = BTMViewModel(
+            manager: BTMManager(
+                source: FixtureDataSource(),
+                database: InMemoryDatabaseAdapter(seed: []),
+                backupManager: BackupManager(base: URL(fileURLWithPath: NSTemporaryDirectory()))
+            ),
+            helperClient: MockHelperClient(
+                dump: BTMFixture.sampleDump,
+                capabilities: HelperCapabilities(helperVersion: "1.0.0", interfaceVersion: 1)
+            )
+        )
+        let entry = BTMEntry(
+            uuid: "readonly-toggle",
+            identifier: "readonly.toggle",
+            name: "Readonly Toggle",
+            type: .app,
+            category: .loginItem,
+            disposition: "[enabled]",
+            url: "file:///Applications/Readonly.app/",
+            generation: 1,
+            bundleID: "readonly.toggle",
+            parentIdentifier: nil,
+            embeddedItemIdentifiers: []
+        )
+
+        viewModel.writeOperationsSupported = false
+        viewModel.setEnabledState(false, for: entry)
+        #expect(viewModel.errorKey == "btm.helper.error.toggle_unsupported")
+        #expect(viewModel.entryEnabledOverrides[entry.id] == nil)
+    }
+
+    @Test func helperWriteDatabaseAdapterDeleteSuccess() throws {
+        let helper = MockHelperClient(
+            dump: "",
+            capabilities: HelperCapabilities(helperVersion: "1.0.0", interfaceVersion: 1, supportsWriteOperations: true, writeSchemaVersion: 1)
+        )
+        let adapter = HelperWriteDatabaseAdapter(helperClient: helper)
+        try adapter.deleteEntries(identifiers: ["target.id"])
+        let remaining = try adapter.remainingRelatedEntries(for: ["target.id"])
+        #expect(remaining.isEmpty)
+    }
+
+    @Test func helperWriteDatabaseAdapterDeleteFailure() {
+        let helper = MockHelperClient(
+            dump: BTMFixture.sampleDump,
+            capabilities: HelperCapabilities(helperVersion: "1.0.0", interfaceVersion: 1, supportsWriteOperations: true, writeSchemaVersion: 1),
+            writeError: BTMCoreError.helperExecutionFailed("write failed")
+        )
+        let adapter = HelperWriteDatabaseAdapter(helperClient: helper)
+
+        #expect(throws: BTMCoreError.self) {
+            try adapter.deleteEntries(identifiers: ["target.id"])
+        }
+    }
+
+    @Test func toggleWriteFailureRollsBackOverride() async {
+        let helper = MockHelperClient(
+            dump: BTMFixture.sampleDump,
+            capabilities: HelperCapabilities(helperVersion: "1.0.0", interfaceVersion: 1, supportsWriteOperations: true, writeSchemaVersion: 1),
+            writeError: BTMCoreError.helperCommunicationFailed
+        )
+        let viewModel = BTMViewModel(
+            manager: BTMManager(
+                source: FixtureDataSource(),
+                database: InMemoryDatabaseAdapter(seed: []),
+                backupManager: BackupManager(base: URL(fileURLWithPath: NSTemporaryDirectory()))
+            ),
+            helperClient: helper
+        )
+        let entry = BTMEntry(
+            uuid: "toggle-failure",
+            identifier: "toggle.failure",
+            name: "Toggle Failure",
+            type: .app,
+            category: .loginItem,
+            disposition: "[enabled]",
+            url: "file:///Applications/ToggleFailure.app/",
+            generation: 1,
+            bundleID: "toggle.failure",
+            parentIdentifier: nil,
+            embeddedItemIdentifiers: []
+        )
+
+        viewModel.writeOperationsSupported = true
+        viewModel.toggleOperationsSupported = true
+        viewModel.entries = [entry]
+        viewModel.setEnabledState(false, for: entry)
+        try? await Task.sleep(nanoseconds: 120_000_000)
+
+        #expect(viewModel.enabledState(for: entry))
+        #expect(viewModel.errorKey == "btm.helper.error.communication")
+    }
+
+    @Test func btmFixtureDeleteOnCopiedFileRemovesTargetIdentifier() throws {
+        guard let fixtureURL = btmFixtureFileURL() else {
+            return
+        }
+        let workingURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("BackgroundItems-v13-copy-\(UUID().uuidString).btm")
+        defer { try? FileManager.default.removeItem(at: workingURL) }
+        try FileManager.default.copyItem(at: fixtureURL, to: workingURL)
+
+        let targetIdentifier = "8.com.tencent.Lemon.trash"
+        let countsBefore = try BTMArchiveTestSupport.identifierCounts(in: workingURL)
+        #expect(!countsBefore.isEmpty)
+        guard let removedCount = countsBefore[targetIdentifier] else {
+            Issue.record("fixture missing expected identifier: \(targetIdentifier)")
+            return
+        }
+
+        let deleted = try BTMArchiveTestSupport.removeIdentifier(targetIdentifier, from: workingURL)
+        #expect(deleted)
+
+        let countsAfter = try BTMArchiveTestSupport.identifierCounts(in: workingURL)
+        let remainingCount = countsAfter[targetIdentifier] ?? 0
+        #expect(remainingCount == 0)
+        #expect(countsAfter.values.reduce(0, +) == countsBefore.values.reduce(0, +) - removedCount)
+    }
+
     private func parseKeys(from fileURL: URL) throws -> Set<String> {
         let text = try String(contentsOf: fileURL, encoding: .utf8)
         let lines = text.split(whereSeparator: \.isNewline).map(String.init)
@@ -304,15 +454,36 @@ struct BackgroundPlusTests {
         return Set(keys)
     }
 
+    private func btmFixtureFileURL() -> URL? {
+        let rootBySourceFile = URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let rootByWorkingDirectory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+
+        let candidates = [
+            rootBySourceFile.appendingPathComponent("BackgroundPlusBTMMockData/BackgroundItems-v13.btm"),
+            rootByWorkingDirectory.appendingPathComponent("BackgroundPlusBTMMockData/BackgroundItems-v13.btm"),
+            rootByWorkingDirectory.appendingPathComponent("BackgroundPlus/BackgroundPlusBTMMockData/BackgroundItems-v13.btm")
+        ]
+
+        for candidate in candidates where FileManager.default.fileExists(atPath: candidate.path) {
+            if let identifiers = try? BTMArchiveTestSupport.identifiers(in: candidate), !identifiers.isEmpty {
+                return candidate
+            }
+        }
+        return nil
+    }
+
 }
 
 private struct MockHelperClient: PrivilegedHelperClient {
     let dump: String
     let capabilities: HelperCapabilities?
     var capabilityError: Error?
+    var writeError: Error?
 
-    func fetchBTMDump() throws -> String {
-        dump
+    func fetchBTMDump() throws -> DumpFetchResult {
+        DumpFetchResult(dump: dump, sourceMethod: .fixture)
     }
 
     func fetchHelperCapabilities() throws -> HelperCapabilities {
@@ -324,13 +495,19 @@ private struct MockHelperClient: PrivilegedHelperClient {
         }
         return capabilities
     }
+
+    func performWrite(_ request: HelperWriteRequest) throws {
+        if let writeError {
+            throw writeError
+        }
+    }
 }
 
 private struct FlappingHelperClient: PrivilegedHelperClient {
     let next: () -> Result<HelperCapabilities, Error>
 
-    func fetchBTMDump() throws -> String {
-        BTMFixture.sampleDump
+    func fetchBTMDump() throws -> DumpFetchResult {
+        DumpFetchResult(dump: BTMFixture.sampleDump, sourceMethod: .fixture)
     }
 
     func fetchHelperCapabilities() throws -> HelperCapabilities {
@@ -341,6 +518,8 @@ private struct FlappingHelperClient: PrivilegedHelperClient {
             throw error
         }
     }
+
+    func performWrite(_ request: HelperWriteRequest) throws {}
 }
 
 private struct FailingBackupManager: BackupManaging {
@@ -348,5 +527,119 @@ private struct FailingBackupManager: BackupManaging {
 
     func createBackup(sourceFiles: [URL], operationId: String, targetIdentifier: String) throws -> URL {
         throw NSError(domain: "test", code: 1)
+    }
+}
+
+private enum BTMArchiveTestSupport {
+    static func identifierCounts(in fileURL: URL) throws -> [String: Int] {
+        var counts: [String: Int] = [:]
+        for identifier in try identifiers(in: fileURL) {
+            counts[identifier, default: 0] += 1
+        }
+        return counts
+    }
+
+    static func identifiers(in fileURL: URL) throws -> [String] {
+        let data = try Data(contentsOf: fileURL)
+        var format = PropertyListSerialization.PropertyListFormat.binary
+        guard let root = try PropertyListSerialization.propertyList(
+            from: data,
+            options: [.mutableContainersAndLeaves],
+            format: &format
+        ) as? NSMutableDictionary,
+              let objects = root["$objects"] as? NSMutableArray else {
+            return []
+        }
+
+        var ids: [String] = []
+        ids.reserveCapacity(objects.count)
+
+        for object in objects {
+            guard let dict = object as? [String: Any] else { continue }
+            guard let identifierUID = uidValue(from: dict["identifier"]) else { continue }
+            guard identifierUID >= 0, identifierUID < objects.count else { continue }
+            guard let identifier = objects[identifierUID] as? String, !identifier.isEmpty else { continue }
+            ids.append(identifier)
+        }
+
+        return ids
+    }
+
+    static func removeIdentifier(_ identifier: String, from storeURL: URL) throws -> Bool {
+        let data = try Data(contentsOf: storeURL)
+        var format = PropertyListSerialization.PropertyListFormat.binary
+        guard let root = try PropertyListSerialization.propertyList(
+            from: data,
+            options: [.mutableContainersAndLeaves],
+            format: &format
+        ) as? NSMutableDictionary else {
+            return false
+        }
+        guard let objects = root["$objects"] as? NSMutableArray else {
+            return false
+        }
+
+        let objectSnapshot = objects.map { $0 }
+        var targetUIDs = Set<Int>()
+        for (index, object) in objectSnapshot.enumerated() {
+            guard let dict = object as? [String: Any] else { continue }
+            guard let identifierUID = uidValue(from: dict["identifier"]) else { continue }
+            guard identifierUID >= 0, identifierUID < objectSnapshot.count else { continue }
+            if (objectSnapshot[identifierUID] as? String) == identifier {
+                targetUIDs.insert(index)
+            }
+        }
+
+        guard !targetUIDs.isEmpty else { return false }
+        var changed = false
+
+        for case let dict as NSMutableDictionary in objects {
+            for case let key as String in dict.allKeys {
+                let value = dict[key]
+                if let uid = uidValue(from: value), targetUIDs.contains(uid) {
+                    dict[key] = makeUID(0)
+                    changed = true
+                    continue
+                }
+
+                if let arrayValue = value as? NSMutableArray {
+                    let filtered = arrayValue.filter { element in
+                        guard let uid = uidValue(from: element) else { return true }
+                        return !targetUIDs.contains(uid)
+                    }
+                    if filtered.count != arrayValue.count {
+                        arrayValue.removeAllObjects()
+                        arrayValue.addObjects(from: filtered)
+                        changed = true
+                    }
+                }
+            }
+        }
+
+        for uid in targetUIDs where uid < objects.count {
+            objects[uid] = "$null"
+            changed = true
+        }
+
+        guard changed else { return false }
+        let updatedData = try PropertyListSerialization.data(fromPropertyList: root, format: .binary, options: 0)
+        try updatedData.write(to: storeURL, options: .atomic)
+        return true
+    }
+
+    private static func makeUID(_ value: Int) -> [String: Any] {
+        ["CF$UID": value]
+    }
+
+    private static func uidValue(from candidate: Any?) -> Int? {
+        if let dict = candidate as? [String: Any], let uid = dict["CF$UID"] as? Int {
+            return uid
+        }
+        if let object = candidate as AnyObject?,
+           object.responds(to: NSSelectorFromString("value")),
+           let uid = object.value(forKey: "value") as? Int {
+            return uid
+        }
+        return nil
     }
 }

@@ -11,7 +11,11 @@
 - Verify Settings -> Helper Setup shows install state and retry action.
 - Verify helper install failure message is readable and actionable.
 - Verify list/details render from `sfltool dumpbtm` output.
+- Verify read-only downgrade appears when helper reports write unsupported.
 - Verify low/medium/high confirmation flows.
+- Verify single-entry delete success/failure paths via helper write route.
+- Verify toggle write success/failure and state rollback behavior.
+- Verify dump refreshes after successful write operations.
 - Verify backup folder opens from result page.
 - Verify operation history shows backup path.
 - Verify Chinese and English UI labels.

@@ -138,9 +138,22 @@ struct OperationRecord: Identifiable, Codable {
 struct LoadResult {
     let entries: [BTMEntry]
     let projection: BTMEntryProjection
+    let sourceMethod: BTMListSourceMethod
     let parseIncomplete: Bool
     let unknownFieldCount: Int
     let unknownCategoryCount: Int
+}
+
+enum BTMListSourceMethod: String, Codable {
+    case btmFile = "btm_file"
+    case sfltool = "sfltool"
+    case fixture = "fixture"
+    case unknown = "unknown"
+}
+
+struct DumpFetchResult {
+    let dump: String
+    let sourceMethod: BTMListSourceMethod
 }
 
 struct BTMParseOutput {
@@ -168,6 +181,7 @@ enum BTMCoreError: LocalizedError {
     case helperProtocolMismatch
     case helperCapabilitiesUnavailable
     case helperVersionMismatch
+    case helperWriteUnsupported
     case helperExecutionFailed(String)
     case permissionDenied
 
@@ -189,6 +203,8 @@ enum BTMCoreError: LocalizedError {
             return "btm.helper.error.capabilities_unavailable"
         case .helperVersionMismatch:
             return "btm.helper.error.version_mismatch"
+        case .helperWriteUnsupported:
+            return "btm.helper.error.write_unsupported"
         case let .helperExecutionFailed(message):
             return message
         case .permissionDenied:
@@ -496,11 +512,11 @@ struct PostCheckResult {
 }
 
 protocol BTMDataSource {
-    func fetchDump() throws -> String
+    func fetchDump() throws -> DumpFetchResult
 }
 
 struct SFLToolDataSource: BTMDataSource {
-    func fetchDump() throws -> String {
+    func fetchDump() throws -> DumpFetchResult {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/sfltool")
         process.arguments = ["dumpbtm"]
@@ -513,20 +529,20 @@ struct SFLToolDataSource: BTMDataSource {
         guard let raw = String(data: data, encoding: .utf8), !raw.isEmpty else {
             throw BTMCoreError.parseFailed
         }
-        return raw
+        return DumpFetchResult(dump: raw, sourceMethod: .sfltool)
     }
 }
 
 struct FixtureDataSource: BTMDataSource {
-    func fetchDump() throws -> String {
-        BTMFixture.sampleDump
+    func fetchDump() throws -> DumpFetchResult {
+        DumpFetchResult(dump: BTMFixture.sampleDump, sourceMethod: .fixture)
     }
 }
 
 struct PrivilegedHelperDataSource: BTMDataSource {
     let helperClient: PrivilegedHelperClient
 
-    func fetchDump() throws -> String {
+    func fetchDump() throws -> DumpFetchResult {
         btmDataSourceLog.info("Fetching dump via helper")
         return try helperClient.fetchBTMDump()
     }
@@ -552,6 +568,35 @@ final class InMemoryDatabaseAdapter: BTMDatabaseAdapter {
 
     func remainingRelatedEntries(for identifiers: [String]) throws -> [String] {
         identifiers.filter { storedIdentifiers.contains($0) }
+    }
+}
+
+final class HelperWriteDatabaseAdapter: BTMDatabaseAdapter {
+    private let helperClient: PrivilegedHelperClient
+    private let parser = BTMDumpParser()
+
+    init(helperClient: PrivilegedHelperClient) {
+        self.helperClient = helperClient
+    }
+
+    func deleteEntries(identifiers: [String]) throws {
+        for identifier in identifiers {
+            let request = HelperWriteRequest(
+                version: helperWriteRouteVersion,
+                operation: .delete,
+                identifier: identifier,
+                modeRawValue: DeleteMode.safe.rawValue,
+                enabled: nil
+            )
+            try helperClient.performWrite(request)
+        }
+    }
+
+    func remainingRelatedEntries(for identifiers: [String]) throws -> [String] {
+        let dumpResult = try helperClient.fetchBTMDump()
+        let entries = parser.parse(dumpResult.dump).entries
+        let existing = Set(entries.map(\.identifier))
+        return identifiers.filter { existing.contains($0) }
     }
 }
 
@@ -603,12 +648,13 @@ final class BTMManager {
     }
 
     func loadEntries() throws -> LoadResult {
-        let dump = try source.fetchDump()
-        let parse = parser.parse(dump)
+        let dumpResult = try source.fetchDump()
+        let parse = parser.parse(dumpResult.dump)
         let projection = projector.project(entries: parse.entries)
         return LoadResult(
             entries: parse.entries,
             projection: projection,
+            sourceMethod: dumpResult.sourceMethod,
             parseIncomplete: parse.parseIncomplete,
             unknownFieldCount: parse.unknownFieldCount,
             unknownCategoryCount: parse.unknownCategoryCount

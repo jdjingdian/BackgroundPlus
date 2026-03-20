@@ -61,6 +61,7 @@ struct BackgroundItemDetailView: View {
                     Text("btm.confirm.button.delete")
                 }
                 .accessibilityIdentifier("btm.detail.delete_button")
+                .disabled(!viewModel.writeOperationsSupported)
 
                 if let result = viewModel.result {
                     Divider()

@@ -4,6 +4,7 @@ import AppKit
 struct BTMEntryListRowView: View {
     let entry: BTMEntry
     let isEnabled: Bool
+    let isToggleDisabled: Bool
     let canOpenCustomDetail: Bool
     let onToggle: (Bool) -> Void
     let onOpenCustomDetail: () -> Void
@@ -37,6 +38,7 @@ struct BTMEntryListRowView: View {
             .accessibilityLabel(Text(toggleAccessibilityLabelText))
             .accessibilityValue(Text(toggleAccessibilityValueText))
             .toggleStyle(SwitchToggleStyle())
+            .disabled(isToggleDisabled)
 
             Button(action: onOpenCustomDetail) {
                 Image(systemName: "chevron.right")
