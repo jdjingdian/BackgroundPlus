@@ -301,6 +301,7 @@ struct BTMDumpParser {
                 type: parsedType,
                 category: classifyCategory(
                     type: parsedType,
+                    identifier: identifier,
                     url: url,
                     bundleID: bundleID
                 ),
@@ -346,12 +347,20 @@ struct BTMDumpParser {
         return .unknown
     }
 
-    private func classifyCategory(type: BTMEntryType, url: String, bundleID: String) -> BTMEntryCategory {
+    private func classifyCategory(type: BTMEntryType, identifier: String, url: String, bundleID: String) -> BTMEntryCategory {
         let lowerURL = url.lowercased()
+        let lowerIdentifier = identifier.lowercased()
         let isLaunchServicePath = lowerURL.contains("launchdaemons")
             || lowerURL.contains("launchagents")
             || lowerURL.contains("privilegedhelpertools")
         if isLaunchServicePath {
+            return .backgroundItem
+        }
+
+        // In modern BTM data, helper login-item bundles under Contents/Library/LoginItems
+        // usually represent app background services, not "open at login" app entries.
+        if lowerURL.contains("contents/library/loginitems/")
+            || lowerIdentifier.hasPrefix("4.") {
             return .backgroundItem
         }
 

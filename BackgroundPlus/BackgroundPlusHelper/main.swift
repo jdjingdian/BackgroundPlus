@@ -98,6 +98,16 @@ private struct BTMStoreProbeResult {
     let writeAllowed: Bool
 }
 
+private struct DumpDiagnostics {
+    let entryCount: Int
+    let enabledCount: Int
+    let disabledCount: Int
+    let unknownDispositionCount: Int
+    let typeCounts: [String: Int]
+    let dispositionSamples: [String: Int]
+    let identifiers: [String]
+}
+
 private func supportsWriteOperations() -> Bool {
     let args = ProcessInfo.processInfo.arguments
     if args.contains("--helper-disable-write") {
@@ -112,8 +122,267 @@ private func supportsWriteOperations() -> Bool {
     return supported
 }
 
+private func shouldCompareDumpSources() -> Bool {
+    let args = ProcessInfo.processInfo.arguments
+    if args.contains("--helper-disable-dump-compare") {
+        return false
+    }
+    return true
+}
+
+private func dispositionState(_ raw: String) -> String {
+    let lower = raw.lowercased()
+    if lower.contains("disabled") {
+        return "disabled"
+    }
+    if lower.contains("enabled") {
+        return "enabled"
+    }
+    return "unknown"
+}
+
+private func compactMapCounts(_ map: [String: Int], top: Int) -> String {
+    map
+        .sorted { lhs, rhs in
+            if lhs.value == rhs.value {
+                return lhs.key < rhs.key
+            }
+            return lhs.value > rhs.value
+        }
+        .prefix(top)
+        .map { "\($0.key)=\($0.value)" }
+        .joined(separator: ",")
+}
+
+private func collectDumpDiagnostics(from dump: String) -> DumpDiagnostics {
+    let lines = dump.split(whereSeparator: \.isNewline).map(String.init)
+
+    struct ScratchEntry {
+        var identifier = ""
+        var disposition = ""
+        var type = "unknown"
+    }
+
+    func finalize(
+        _ entry: ScratchEntry?,
+        entryCount: inout Int,
+        enabledCount: inout Int,
+        disabledCount: inout Int,
+        unknownDispositionCount: inout Int,
+        typeCounts: inout [String: Int],
+        dispositionSamples: inout [String: Int],
+        identifiers: inout [String]
+    ) {
+        guard let entry, !entry.identifier.isEmpty else { return }
+        entryCount += 1
+        identifiers.append(entry.identifier)
+        typeCounts[entry.type, default: 0] += 1
+        if !entry.disposition.isEmpty {
+            dispositionSamples[entry.disposition, default: 0] += 1
+        }
+        switch dispositionState(entry.disposition) {
+        case "enabled":
+            enabledCount += 1
+        case "disabled":
+            disabledCount += 1
+        default:
+            unknownDispositionCount += 1
+        }
+    }
+
+    var current: ScratchEntry?
+    var entryCount = 0
+    var enabledCount = 0
+    var disabledCount = 0
+    var unknownDispositionCount = 0
+    var typeCounts: [String: Int] = [:]
+    var dispositionSamples: [String: Int] = [:]
+    var identifiers: [String] = []
+
+    for source in lines {
+        let trimmed = source.trimmingCharacters(in: .whitespaces)
+        if trimmed.hasPrefix("#"), trimmed.hasSuffix(":") {
+            finalize(
+                current,
+                entryCount: &entryCount,
+                enabledCount: &enabledCount,
+                disabledCount: &disabledCount,
+                unknownDispositionCount: &unknownDispositionCount,
+                typeCounts: &typeCounts,
+                dispositionSamples: &dispositionSamples,
+                identifiers: &identifiers
+            )
+            current = ScratchEntry()
+            continue
+        }
+
+        guard var entry = current else { continue }
+
+        if trimmed.hasPrefix("Identifier:") {
+            entry.identifier = String(trimmed.dropFirst("Identifier:".count)).trimmingCharacters(in: .whitespaces)
+        } else if trimmed.hasPrefix("Disposition:") {
+            entry.disposition = String(trimmed.dropFirst("Disposition:".count)).trimmingCharacters(in: .whitespaces)
+        } else if trimmed.hasPrefix("Type:") {
+            entry.type = String(trimmed.dropFirst("Type:".count)).trimmingCharacters(in: .whitespaces)
+        }
+
+        current = entry
+    }
+
+    finalize(
+        current,
+        entryCount: &entryCount,
+        enabledCount: &enabledCount,
+        disabledCount: &disabledCount,
+        unknownDispositionCount: &unknownDispositionCount,
+        typeCounts: &typeCounts,
+        dispositionSamples: &dispositionSamples,
+        identifiers: &identifiers
+    )
+
+    return DumpDiagnostics(
+        entryCount: entryCount,
+        enabledCount: enabledCount,
+        disabledCount: disabledCount,
+        unknownDispositionCount: unknownDispositionCount,
+        typeCounts: typeCounts,
+        dispositionSamples: dispositionSamples,
+        identifiers: identifiers
+    )
+}
+
+private func logDumpDiagnostics(_ diagnostics: DumpDiagnostics, label: String) {
+    let typeSummary = compactMapCounts(diagnostics.typeCounts, top: 8)
+    let dispositionSummary = compactMapCounts(diagnostics.dispositionSamples, top: 8)
+    let identifiersPreview = diagnostics.identifiers.prefix(8).joined(separator: ",")
+    helperLog.info(
+        """
+        Dump diagnostics source=\(label, privacy: .public) entries=\(diagnostics.entryCount, privacy: .public) enabled=\(diagnostics.enabledCount, privacy: .public) disabled=\(diagnostics.disabledCount, privacy: .public) unknownDisposition=\(diagnostics.unknownDispositionCount, privacy: .public) types=\(typeSummary, privacy: .public) dispositionSamples=\(dispositionSummary, privacy: .public) identifiersPreview=\(identifiersPreview, privacy: .public)
+        """
+    )
+}
+
+private func logDumpComparison(primary: DumpDiagnostics, fallback: DumpDiagnostics) {
+    let primarySet = Set(primary.identifiers)
+    let fallbackSet = Set(fallback.identifiers)
+    let onlyPrimary = Array(primarySet.subtracting(fallbackSet)).sorted().prefix(12).joined(separator: ",")
+    let onlyFallback = Array(fallbackSet.subtracting(primarySet)).sorted().prefix(12).joined(separator: ",")
+
+    helperLog.info(
+        """
+        Dump compare btm_file_vs_sfltool entriesDelta=\(primary.entryCount - fallback.entryCount, privacy: .public) enabledDelta=\(primary.enabledCount - fallback.enabledCount, privacy: .public) disabledDelta=\(primary.disabledCount - fallback.disabledCount, privacy: .public) unknownDispositionDelta=\(primary.unknownDispositionCount - fallback.unknownDispositionCount, privacy: .public) onlyInBTMFile=\(onlyPrimary, privacy: .public) onlyInSFLTool=\(onlyFallback, privacy: .public)
+        """
+    )
+}
+
 private func accessAllowed(_ path: String, mode: Int32) -> Bool {
     access(path, mode) == 0
+}
+
+private func errnoText(_ code: Int32) -> String {
+    guard let cString = strerror(code) else { return "unknown" }
+    return String(cString: cString)
+}
+
+private func logPOSIXAccess(_ path: String, mode: Int32, label: String) {
+    errno = 0
+    let result = access(path, mode)
+    if result == 0 {
+        helperLog.info("POSIX access check success label=\(label, privacy: .public) path=\(path, privacy: .public)")
+        return
+    }
+
+    let code = errno
+    helperLog.error(
+        "POSIX access check failed label=\(label, privacy: .public) path=\(path, privacy: .public) errno=\(code, privacy: .public) message=\(errnoText(code), privacy: .public)"
+    )
+}
+
+private func logPOSIXDirectoryOpen(_ path: String) {
+    errno = 0
+    guard let dir = opendir(path) else {
+        let code = errno
+        helperLog.error(
+            "POSIX opendir failed path=\(path, privacy: .public) errno=\(code, privacy: .public) message=\(errnoText(code), privacy: .public)"
+        )
+        return
+    }
+
+    helperLog.info("POSIX opendir success path=\(path, privacy: .public)")
+    closedir(dir)
+}
+
+private func logPOSIXStat(_ path: String) {
+    var st = stat()
+    errno = 0
+    let result = stat(path, &st)
+    if result == 0 {
+        helperLog.info(
+            "POSIX stat success path=\(path, privacy: .public) mode=0\(String(st.st_mode, radix: 8), privacy: .public) uid=\(st.st_uid, privacy: .public) gid=\(st.st_gid, privacy: .public)"
+        )
+        return
+    }
+
+    let code = errno
+    helperLog.error(
+        "POSIX stat failed path=\(path, privacy: .public) errno=\(code, privacy: .public) message=\(errnoText(code), privacy: .public)"
+    )
+}
+
+@discardableResult
+private func runCommandProbe(executable: String, arguments: [String]) -> (status: Int32, output: String) {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: executable)
+    process.arguments = arguments
+    let pipe = Pipe()
+    process.standardOutput = pipe
+    process.standardError = pipe
+
+    do {
+        try process.run()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        let output = String(data: data, encoding: .utf8) ?? ""
+        return (process.terminationStatus, output)
+    } catch {
+        return (-1, "launch_error: \(error.localizedDescription)")
+    }
+}
+
+private func logExternalProbe(_ root: URL) {
+    let ls = runCommandProbe(executable: "/bin/ls", arguments: ["-lde@", root.path])
+    let lsOutput = ls.output.trimmingCharacters(in: .whitespacesAndNewlines)
+    helperLog.info(
+        "External probe ls status=\(ls.status, privacy: .public) path=\(root.path, privacy: .public) output=\(lsOutput, privacy: .public)"
+    )
+
+    let statProbe = runCommandProbe(executable: "/usr/bin/stat", arguments: ["-x", root.path])
+    let statOutput = statProbe.output.trimmingCharacters(in: .whitespacesAndNewlines)
+    helperLog.info(
+        "External probe stat status=\(statProbe.status, privacy: .public) path=\(root.path, privacy: .public) output=\(statOutput, privacy: .public)"
+    )
+}
+
+private func logFileManagerProbe(_ root: URL) {
+    let path = root.path
+    let readable = FileManager.default.isReadableFile(atPath: path)
+    let writable = FileManager.default.isWritableFile(atPath: path)
+    let executable = FileManager.default.isExecutableFile(atPath: path)
+    helperLog.info(
+        "FileManager probe path=\(path, privacy: .public) readable=\(readable, privacy: .public) writable=\(writable, privacy: .public) executable=\(executable, privacy: .public)"
+    )
+}
+
+private func logDirectoryProbeMatrix(_ root: URL) {
+    let path = root.path
+    helperLog.info("Access matrix probe start path=\(path, privacy: .public)")
+    logPOSIXStat(path)
+    logPOSIXAccess(path, mode: F_OK, label: "F_OK")
+    logPOSIXAccess(path, mode: R_OK, label: "R_OK")
+    logPOSIXAccess(path, mode: X_OK, label: "X_OK")
+    logPOSIXDirectoryOpen(path)
+    logFileManagerProbe(root)
+    logExternalProbe(root)
 }
 
 private func probeBTMStoreAccess() -> BTMStoreProbeResult {
@@ -127,6 +396,7 @@ private func probeBTMStoreAccess() -> BTMStoreProbeResult {
     var urls: [URL] = []
     for root in roots {
         helperLog.info("Probing BTM store directory: \(root.path, privacy: .public)")
+        logDirectoryProbeMatrix(root)
         do {
             urls = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
             helperLog.info("Directory list succeeded: \(root.path, privacy: .public), itemCount=\(urls.count)")
@@ -187,6 +457,16 @@ private func uidValue(from candidate: Any?) -> Int? {
        let uid = object.value(forKey: "value") as? Int {
         return uid
     }
+    if let object = candidate {
+        let text = String(describing: object)
+        if let range = text.range(of: "value = ") {
+            let suffix = text[range.upperBound...]
+            let digits = suffix.prefix { $0.isNumber }
+            if !digits.isEmpty, let uid = Int(digits) {
+                return uid
+            }
+        }
+    }
     return nil
 }
 
@@ -228,15 +508,36 @@ private func entryTypeText(typeRaw: Int) -> String {
     case 3:
         return "agent (0x3)"
     case 4:
-        return "developer (0x4)"
+        return "app (0x4)"
+    case 0x10:
+        return "daemon (0x10)"
+    case 0x20:
+        return "developer (0x20)"
+    case 0x40:
+        return "spotlight (0x40)"
+    case 0x800:
+        return "quicklook (0x800)"
+    case 0x10008:
+        return "legacy agent (0x10008)"
+    case 0x10010:
+        return "legacy daemon (0x10010)"
     default:
         return "unknown (0x\(String(typeRaw, radix: 16)))"
     }
 }
 
 private func dispositionText(raw: Int) -> String {
-    let state = raw == 0 ? "disabled" : "enabled"
-    return "[\(state)] (0x\(String(raw, radix: 16)))"
+    let enabled = (raw & 0x1) != 0
+    let allowed = (raw & 0x2) != 0
+    let visible = (raw & 0x4) != 0
+    let notified = (raw & 0x8) != 0
+
+    let enabledText = enabled ? "enabled" : "disabled"
+    let allowedText = allowed ? "allowed" : "disallowed"
+    let visibleText = visible ? "visible" : "hidden"
+    let notifiedText = notified ? "notified" : "not notified"
+
+    return "[\(enabledText), \(allowedText), \(visibleText), \(notifiedText)] (0x\(String(raw, radix: 16)))"
 }
 
 private func urlText(from value: Any?, objects: [Any]) -> String {
@@ -299,7 +600,11 @@ private func convertBTMStoreToDump(_ storeURL: URL) throws -> String {
         let dispositionRaw = (dict["disposition"] as? Int) ?? 0
         let generation = (dict["generation"] as? Int) ?? 0
         let bundleID = (resolvedObject(for: "bundleIdentifier", in: dict, objects: objects) as? String) ?? ""
-        let parentID = (resolvedObject(for: "parentIdentifier", in: dict, objects: objects) as? String) ?? ""
+        let parentID = (
+            (resolvedObject(for: "parentIdentifier", in: dict, objects: objects) as? String)
+                ?? (resolvedObject(for: "container", in: dict, objects: objects) as? String)
+                ?? ""
+        )
         let url = urlText(from: resolvedObject(for: "url", in: dict, objects: objects), objects: objects)
         let uuid = uuidText(from: resolvedObject(for: "uuid", in: dict, objects: objects))
         let embedded = identifiersInItems(resolvedObject(for: "items", in: dict, objects: objects), objects: objects)
@@ -339,6 +644,18 @@ private func fetchDumpViaPreferredSource() throws -> (dump: String, source: Dump
     if let storeURL = probe.stores.first, probe.readAllowed {
         do {
             let dump = try convertBTMStoreToDump(storeURL)
+            let directDiagnostics = collectDumpDiagnostics(from: dump)
+            logDumpDiagnostics(directDiagnostics, label: "btm_file")
+            if shouldCompareDumpSources() {
+                do {
+                    let sfltoolDump = try dumpBTMRaw()
+                    let sfltoolDiagnostics = collectDumpDiagnostics(from: sfltoolDump)
+                    logDumpDiagnostics(sfltoolDiagnostics, label: "sfltool")
+                    logDumpComparison(primary: directDiagnostics, fallback: sfltoolDiagnostics)
+                } catch {
+                    helperLog.error("Dump comparison skipped: failed to run sfltool for diagnostics: \(error.localizedDescription, privacy: .public)")
+                }
+            }
             helperLog.info("Dump source=btm_file path=\(storeURL.path, privacy: .public)")
             return (dump, .btmFile)
         } catch {
