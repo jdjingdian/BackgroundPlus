@@ -1,8 +1,9 @@
 "btm.list.title" = "后台项目管理";
 "btm.list.search_placeholder" = "搜索 Identifier / Bundle / 路径";
 "btm.list.empty" = "未找到条目";
-"btm.list.empty.login_items" = "当前没有登录时打开项目";
-"btm.list.empty.background_items" = "当前没有允许在后台项目";
+"btm.list.empty.login_items" = "当前没有已确认且已开启的登录时打开项目";
+"btm.list.empty.background_items" = "当前没有已确认且已开启的允许在后台项目";
+"btm.list.empty.full_dump_items" = "当前没有完整 Dump 条目";
 "btm.list.refresh" = "刷新";
 "btm.list.state.loading" = "正在加载 BTM 数据...";
 "btm.list.open_custom_detail" = "打开定制功能详情";
@@ -12,6 +13,7 @@
 "btm.sidebar.background_modules" = "后台模块";
 "btm.sidebar.login_items" = "登录时打开";
 "btm.sidebar.background_items" = "允许在后台";
+"btm.sidebar.full_dump_items" = "完整 Dump 数据";
 "btm.custom_detail.title" = "我的定制功能";
 "btm.custom_detail.back" = "返回";
 "btm.custom_detail.unavailable.title" = "无法打开";
@@ -99,7 +101,7 @@
 
 "btm.error.backup_failed" = "备份失败，已阻止写入";
 "btm.error.parse_incomplete" = "解析不完整，结果可能不准确";
-"btm.error.classification_incomplete" = "分类不完整，未能归类的条目已展示在“允许在后台”中";
+"btm.error.classification_incomplete" = "分类不完整，未能归类的条目已展示在“完整 Dump 数据”中";
 "btm.error.permission_denied" = "权限不足，无法执行该操作";
 "btm.error.execution_failed" = "执行失败：%@";
 "btm.error.unknown" = "发生未知错误";

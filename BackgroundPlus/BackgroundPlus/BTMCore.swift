@@ -151,11 +151,12 @@ struct BTMParseOutput {
 }
 
 struct BTMEntryProjection: Equatable {
+    let allItems: [BTMEntry]
     let loginItems: [BTMEntry]
     let backgroundItems: [BTMEntry]
     let unknownItems: [BTMEntry]
 
-    static let empty = BTMEntryProjection(loginItems: [], backgroundItems: [], unknownItems: [])
+    static let empty = BTMEntryProjection(allItems: [], loginItems: [], backgroundItems: [], unknownItems: [])
 }
 
 enum BTMCoreError: LocalizedError {
@@ -354,6 +355,7 @@ struct BTMDumpParser {
 
 struct EntryProjector {
     func project(entries: [BTMEntry]) -> BTMEntryProjection {
+        let allItems = entries
         var loginItems: [BTMEntry] = []
         var backgroundItems: [BTMEntry] = []
         var unknownItems: [BTMEntry] = []
@@ -366,10 +368,10 @@ struct EntryProjector {
                 backgroundItems.append(entry)
             case .unknown:
                 unknownItems.append(entry)
-                backgroundItems.append(entry)
             }
         }
         return BTMEntryProjection(
+            allItems: allItems,
             loginItems: loginItems,
             backgroundItems: backgroundItems,
             unknownItems: unknownItems

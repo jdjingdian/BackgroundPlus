@@ -44,6 +44,8 @@ struct BTMShellView: View {
                 .tag(BTMSidebarItem.loginItems)
             Label("btm.sidebar.background_items", systemImage: "switch.2")
                 .tag(BTMSidebarItem.backgroundItems)
+            Label("btm.sidebar.full_dump_items", systemImage: "tray.full")
+                .tag(BTMSidebarItem.fullDumpItems)
         }
         .navigationTitle(Text("btm.list.title"))
     }

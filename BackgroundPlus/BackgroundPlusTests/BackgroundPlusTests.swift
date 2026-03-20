@@ -106,7 +106,7 @@ struct BackgroundPlusTests {
         #expect(output.unknownCategoryCount == 1)
     }
 
-    @Test func projectorRoutesUnknownEntriesIntoBackgroundList() {
+    @Test func projectorKeepsUnknownEntriesOutOfBackgroundListAndPreservesAllItems() {
         let entries: [BTMEntry] = [
             BTMEntry(
                 uuid: "app",
@@ -137,8 +137,9 @@ struct BackgroundPlusTests {
         ]
 
         let projection = EntryProjector().project(entries: entries)
+        #expect(projection.allItems.count == 2)
         #expect(projection.loginItems.count == 1)
-        #expect(projection.backgroundItems.count == 1)
+        #expect(projection.backgroundItems.isEmpty)
         #expect(projection.unknownItems.count == 1)
     }
 

@@ -46,10 +46,14 @@ final class BackgroundPlusUITests: XCTestCase {
         app.launchArguments += ["--ui-test-fixture", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
 
-        let deleteButton = app.buttons["Delete"]
+        app.staticTexts["Full Dump Data"].click()
+        let staticRouter = app.staticTexts["Static Router"]
+        XCTAssertTrue(staticRouter.waitForExistence(timeout: 5))
+        staticRouter.click()
+
+        let deleteButton = app.buttons["btm.detail.delete_button"]
         XCTAssertTrue(deleteButton.waitForExistence(timeout: 5))
         deleteButton.click()
-        XCTAssertTrue(app.staticTexts["Second Confirmation"].waitForExistence(timeout: 5))
     }
 
     @MainActor
@@ -77,11 +81,12 @@ final class BackgroundPlusUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(app.staticTexts["Parsing incomplete. Results may be inaccurate."].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Static Router"].exists)
+        app.staticTexts["Full Dump Data"].click()
+        XCTAssertTrue(app.staticTexts["Static Router"].waitForExistence(timeout: 5))
     }
 
     @MainActor
-    func testSidebarSplitsLoginAndBackgroundSections() throws {
+    func testSidebarSupportsFilteredSectionsAndFullDumpList() throws {
         let app = XCUIApplication()
         app.launchArguments += ["--ui-test-fixture", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
@@ -89,11 +94,17 @@ final class BackgroundPlusUITests: XCTestCase {
         let loginSidebarItem = app.staticTexts["Open at Login"]
         XCTAssertTrue(loginSidebarItem.waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Allow in Background"].exists)
-        XCTAssertTrue(app.staticTexts["Static Router"].exists)
+        XCTAssertTrue(app.staticTexts["Full Dump Data"].exists)
+        XCTAssertFalse(app.staticTexts["Static Router"].exists)
 
         let backgroundSidebarItem = app.staticTexts["Allow in Background"]
         backgroundSidebarItem.click()
-        XCTAssertTrue(app.staticTexts["cn.magicdian.staticrouter.helper"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["cn.magicdian.staticrouter.helper"].exists)
+
+        let fullDumpSidebarItem = app.staticTexts["Full Dump Data"]
+        fullDumpSidebarItem.click()
+        XCTAssertTrue(app.staticTexts["Static Router"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["cn.magicdian.staticrouter.helper"].exists)
     }
 
     @MainActor
@@ -103,6 +114,7 @@ final class BackgroundPlusUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(app.staticTexts["Background Items"].waitForExistence(timeout: 5))
+        app.staticTexts["Full Dump Data"].click()
         let toggles = app.descendants(matching: .any).matching(identifier: "btm.row.toggle")
         XCTAssertGreaterThanOrEqual(toggles.count, 20)
     }
@@ -113,6 +125,7 @@ final class BackgroundPlusUITests: XCTestCase {
         app.launchArguments += ["--ui-test-fixture", "--ui-test-invalid-detail-entry", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
 
+        app.staticTexts["Full Dump Data"].click()
         let invalidEntry = app.staticTexts["Invalid Entry For UI Test"]
         XCTAssertTrue(invalidEntry.waitForExistence(timeout: 5))
         let firstDetailButton = app.buttons.matching(identifier: "btm.row.custom_detail_button").firstMatch
@@ -129,6 +142,7 @@ final class BackgroundPlusUITests: XCTestCase {
         let title = app.staticTexts["后台项目管理"].firstMatch
         XCTAssertTrue(title.waitForExistence(timeout: 5))
         let initialTitleX = title.frame.minX
+        app.staticTexts["完整 Dump 数据"].click()
 
         let detailButtonQuery = app.buttons.matching(identifier: "btm.row.custom_detail_button")
         guard let detailButton = detailButtonQuery.allElementsBoundByIndex.first(where: { $0.isEnabled }) else {

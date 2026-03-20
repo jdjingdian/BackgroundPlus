@@ -31,6 +31,7 @@ enum HelperCompatibilityState: Equatable {
 enum BTMSidebarItem: Hashable {
     case loginItems
     case backgroundItems
+    case fullDumpItems
 }
 
 final class BTMViewModel: ObservableObject {
@@ -116,8 +117,12 @@ final class BTMViewModel: ObservableObject {
         switch selectedSidebarItem {
         case .loginItems:
             return "btm.list.empty.login_items"
-        case .backgroundItems, .none:
+        case .backgroundItems:
             return "btm.list.empty.background_items"
+        case .fullDumpItems:
+            return "btm.list.empty.full_dump_items"
+        case .none:
+            return "btm.list.empty"
         }
     }
 
@@ -400,10 +405,18 @@ final class BTMViewModel: ObservableObject {
     private var entriesForSelectedSidebar: [BTMEntry] {
         switch selectedSidebarItem {
         case .loginItems:
-            return projectedEntries.loginItems
-        case .backgroundItems, .none:
-            return projectedEntries.backgroundItems
+            return projectedEntries.loginItems.filter(isConfirmedAndEnabled)
+        case .backgroundItems:
+            return projectedEntries.backgroundItems.filter(isConfirmedAndEnabled)
+        case .fullDumpItems:
+            return projectedEntries.allItems
+        case .none:
+            return projectedEntries.loginItems.filter(isConfirmedAndEnabled)
         }
+    }
+
+    private func isConfirmedAndEnabled(_ entry: BTMEntry) -> Bool {
+        entry.category != .unknown && enabledState(for: entry)
     }
 
     private func syncSelectionForSidebarChange() {
